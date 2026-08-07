@@ -1,0 +1,6 @@
+build/
+*.pdx/
+.DS_Store
+Thumbs.db
+luacats/
+.sentry-native/

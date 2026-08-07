@@ -1,0 +1,36 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build",
+            "type": "process",
+            "command": "${env:PLAYDATE_SDK_PATH}/bin/pdc.exe",
+            "args": [
+                "${workspaceFolder}/source",
+                "${workspaceFolder}/Ringe.pdx"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run",
+            "type": "process",
+            "command": "${env:PLAYDATE_SDK_PATH}/bin/PlaydateSimulator.exe",
+            "args": [
+                "${workspaceFolder}/Ringe.pdx"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "Build",
+            "dependsOrder": "sequence",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
