@@ -4,12 +4,13 @@
     },
     "workspace": {
         "library": [
-            "${workspaceFolder}/luacats/library"
+            "./luacats"
         ],
         "checkThirdParty": false
     },
     "diagnostics": {
         "globals": [
+            "import",
             "playdate"
         ]
     }

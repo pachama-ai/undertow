@@ -1,3 +1,130 @@
-local config = {}
+Config = {
+    -- Bildschirmmitte in Pixel
+    centerX = 200,
+    centerY = 120,
 
-return config
+    -- Refreshrate in Hz (fester Frame-Step)
+    refreshRate = 50,
+
+    -- Radien in Pixel
+    outerRadius = 104,
+    innerRadius = 68,
+    coreRadius = 30,
+
+    -- Abmessungen in Pixel
+    trackWidth = 8,
+    playerDiameter = 7,
+    -- Finales Rendering (Phase 8.2), visuelle Tuningwerte
+    coreGrowthPerRoom = 6,   -- Kernradius-Wachstum pro Raum (ARCHITECTURE coreGrowth)
+    corePulseAmplitude = 1,  -- subtile Kernpulsation (px)
+    corePulsePeriod = 3.0,   -- Sekunden pro Pulszyklus
+    bridgeWidth = 6,         -- Breite ausgefahrener Brücken-/Gate-Balken
+    stubLength = 5,          -- sichtbarer Stummel eingefahrener Brücken/Gate
+
+    -- Steuerung: Ringgrad pro Kurbelgrad bzw. Grad pro Sekunde
+    crankRatio = 0.5,
+    dpadSpeed = 90,
+
+    -- Bögen in Grad
+    shutterArcWidth = 26,
+    switchArcWidth = 14,
+    dockRange = 6,
+    -- Andockhilfe: Bereich in Grad und exakte Frames für die sanfte Ausrichtung
+    -- auf nutzbare aktive Brücken und Schalter (kein Gate). Unabhängig von dockRange.
+    dockAssistRange = 4,
+    dockAssistFrames = 3,
+
+    -- Animationsdauern in Sekunden
+    shutterAnimDuration = 0.2,
+    -- Brückenüberquerung/-transit (radiale Bewegung), währenddessen keine Eingabe
+    bridgeAnimDuration = 0.35,
+    cameraDuration = 1.2,
+
+    -- Schaltervorschau (Phase 8.3): gesteuerte Elemente naher Schalter werden
+    -- mit einer 1-px-Aufhellung ihrer Kontur hervorgehoben (1 Blinkzyklus/s).
+    -- Rein visuell; kein Gameplay-Effekt.
+    switchPreviewEnabled = true,  -- Effekt komplett abschaltbar (Playtest-Vergleich)
+    switchPreviewRange = 20,      -- Grad; streng < 20° (exakt 20° ausgeschlossen)
+    previewBlinkPeriod = 1.0,     -- Sekunden pro Blinkzyklus (0.5 s ON / 0.5 s OFF)
+
+    -- Spieler-/Augenanimation (Phase 8.4), visuelle Tuningwerte. Nur
+    -- blinkMinInterval/blinkMaxInterval und shutterSquintFrames sind aus dem
+    -- Konzept zwingend (3-6 s, exakt 6 Frames); der Rest sind Tuningwerte.
+    blinkMinInterval = 3.0,    -- Blink frühestens nach 3 s Stillstand
+    blinkMaxInterval = 6.0,    -- Blink spätestens nach 6 s Stillstand
+    blinkFrames = 4,           -- Blinkdauer in Frames (kurz, 50 fps)
+    switchEyeWidenFrames = 6,  -- Augenweiten-Dauer in Frames
+    shutterSquintFrames = 6,   -- Zusammenkneifen: exakt 6 Frames (verbindlich)
+    bridgeStretchAmount = 2,   -- maximale radiale Streckung (px je Seite)
+
+    -- Audio (Phase 9.1): benannte Tuningwerte, alle Klänge rein synth.
+    -- Konzept-zwingend: Klick alle 15° bei exakt 0.15; Brücke exakt 0.25 s;
+    -- Kernpuls Raum 1 = 55 Hz alle 4.0 s. Der Rest sind Audio-Tuningwerte.
+    audioMovementClickStep = 15,      -- Grad tatsächlicher Ringstrecke pro Klick
+    audioMovementClickVolume = 0.15,  -- exakt 0.15 (verbindlich)
+    audioMovementClickFreq = 40,      -- Noise-Pitch (Hz, mechanisches Tick)
+    audioMovementClickLen = 0.03,     -- Impulsdauer (s), sehr kurz
+    audioSwitchNote1 = 72,            -- Rechteck Ton 1 (MIDI)
+    audioSwitchNote2 = 71,            -- Rechteck Ton 2, exakt 1 Halbton tiefer
+    audioSwitchLen = 0.05,            -- Notenlänge (s)
+    audioSwitchGap = 0.06,            -- Abstand zwischen den zwei Tönen (s)
+    audioSwitchVolume = 0.5,
+    audioBridgeStartFreq = 110,       -- Sägezahn Glide-Start (Hz)
+    audioBridgeEndFreq = 220,         -- Glide-Ende (Hz, ca. eine Oktave aufwärts)
+    audioBridgeDuration = 0.25,       -- exakt 0.25 s (verbindlich)
+    audioBridgeVolume = 0.5,
+    audioImpactFreq = 90,             -- tiefer Sinus (Hz)
+    audioImpactDuration = 0.12,       -- kurzer Stoß (s)
+    audioImpactVolume = 0.6,
+    audioGateFreq = 80,               -- langer tiefer Puls (Hz)
+    audioGateDuration = 1.0,          -- Pulsdauer (s)
+    audioGateVolume = 0.5,
+    audioCoreRoom1Freq = 55,          -- Raum 1 exakt 55 Hz (verbindlich)
+    audioCoreInterval = 4.0,          -- alle 4.0 s (verbindlich)
+    audioCoreDuration = 0.6,          -- Pulsdauer (s)
+    audioCoreVolume = 0.25,           -- sehr leise, konservativ
+    audioCoreSemitoneStep = 4,        -- große Terz = +4 Halbtöne pro Raum
+
+    -- Menü (Phase 10.1): Startmenü-Layout (rein visuell, 1-Bit, keine Animation).
+    menuFontHeight = 8,             -- Systemfont-Höhe (px) für die Marker-Zentrierung
+    menuTitleCenterX = 200,         -- Zentrum der Ring-Titelgrafik
+    menuTitleCenterY = 92,
+    menuTitleOuterRadius = 60,      -- äußerer Titelring
+    menuTitleInnerRadius = 42,      -- innerer Titelring
+    menuTitleArcRadius = 51,        -- Pfad-Andeutung (Bogen zwischen den Ringen)
+    menuTitleArcStart = 200,        -- Bogenanfang (Grad CW)
+    menuTitleArcEnd = 260,          -- Bogenende (Grad CW)
+    menuTitleCoreRadius = 8,        -- Kern (gefüllt)
+    menuTitleLineWidth = 2,         -- Linienstärke der Titelringe
+    menuTitleBridgeAngle = 270,     -- Andeutung einer Brücke (radialer Strich)
+    menuEntryX = 200,               -- horizontale Mitte der Einträge
+    menuEntryY1 = 168,              -- y-Position „Weiter"
+    menuEntryY2 = 196,              -- y-Position „Von vorn"
+    menuMarkerRadius = 4,           -- Auswahlmarkierung (aktiv gefüllt, inaktiv leer)
+    menuMarkerOffset = 16,          -- Abstand der Markierung links vom Text
+
+    -- Eingaben (Phase 10.4): B-Geste (kurz = Undo, 0,6 s halten = Raum neu
+    -- starten) + Crank-eingeklappt-Hinweis. Zeitbasiert (nicht framebasiert).
+    restartHoldDuration = 0.6,      -- B-Hold-Schwelle für „Raum neu starten" (Sekunden)
+    restartHoldRingRadius = 10,     -- Fortschrittsring um die 7-px-Figur (px), klein
+    crankOverlayX = 288,            -- Crank-Hinweis-Box (obere rechte Ecke, kompakt)
+    crankOverlayY = 8,
+    crankOverlayWidth = 106,
+    crankOverlayHeight = 34,
+
+    -- Outro (Abschlussphase B): nach Raum 6. Reine Präsentation (ui/transition.lua).
+    -- ARCHITECTURE (L431) nennt keine Dauern -> benannte Dauerwerte. Vollbildradius
+    -- des Kerns: minimale Vollbildabdeckung = ceil(sqrt(centerX^2 + centerY^2))
+    -- = ceil(sqrt(200^2 + 120^2)) = 234 (entfernteste Ecke bei ~233,2 px).
+    outroRingDissolveDuration = 1.5,  -- R1 löst sich auf (s)
+    outroCoreExpandDuration  = 1.5,  -- Kern wächst auf Vollbild (s)
+    outroIrisDuration        = 1.2,  -- Iris öffnet sich (s)
+    outroHoldDuration        = 0.8,  -- Schlussphase: Iris voll offen vor dem Schnitt (s)
+    outroCoreFullRadius      = 234,  -- Vollbildabdeckung (siehe oben)
+    outroIrisOpenRadius      = 64,   -- Endradius der Iris-Apertur (px)
+    outroIrisRingRadius      = 34,   -- „weiterer Ring" hinter der Iris (px)
+    outroIrisBladeCount      = 8,    -- Anzahl Iris-Blattlinien
+    outroIrisBladeOuter      = 150,  -- Endradius der Iris-Blattlinien (px)
+}
+
+return Config
