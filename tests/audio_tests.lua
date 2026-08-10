@@ -291,4 +291,73 @@ do
     check(elSame, "audio read-only: elementStates unverändert")
 end
 
+-- --- Pass 2: Switch A/B minimal unterschiedlich ----------------------------
+do
+    freshAudio()
+    Audio.playSwitchSnap(true)  -- A (CW): Standardtöne 72/71
+    local calls = Audio.synths.switch.calls
+    check(#calls == 2, "p2 switch: A zwei Töne")
+    check(calls[1].note == Config.audioSwitchNote1 and calls[2].note == Config.audioSwitchNote2, "p2 switch: A = 72/71")
+    Audio.playSwitchSnap(false) -- B (CCW): exakt 1 Halbton tiefer
+    local calls2 = Audio.synths.switch.calls
+    check(#calls2 == 4, "p2 switch: B zwei weitere Töne")
+    check(calls2[3].note == Config.audioSwitchBNote1 and calls2[4].note == Config.audioSwitchBNote2, "p2 switch: B = B-Noten")
+    check(calls2[3].note == calls[1].note - 1, "p2 switch: B exakt 1 Halbton tiefer als A")
+    check(calls2[4].note < calls2[3].note, "p2 switch: B ebenfalls absteigend")
+end
+
+-- --- Pass 2: Blenden-Körperton (Öffnen/Schließen) --------------------------
+do
+    freshAudio()
+    Audio.noteShutterTransitions({ { id = "D1", opened = false } }) -- schließen
+    local calls = Audio.synths.impact.calls
+    check(#calls == 1, "p2 shutter: Schließen -> 1 Ton")
+    check(approx(calls[1].pitch, Config.audioShutterCloseFreq), "p2 shutter: Schließen tiefer/härter")
+    Audio.noteShutterTransitions({ { id = "D1", opened = true } })  -- öffnen
+    local calls2 = Audio.synths.impact.calls
+    check(#calls2 == 2, "p2 shutter: Öffnen -> 1 weiterer Ton")
+    check(approx(calls2[2].pitch, Config.audioShutterOpenFreq), "p2 shutter: Öffnen höher")
+    check(Config.audioShutterOpenFreq > Config.audioShutterCloseFreq, "p2 shutter: Öffnen > Schließen")
+    check(Config.audioShutterOpenVolume < Config.audioShutterCloseVolume, "p2 shutter: Öffnen leiser")
+    Audio.noteShutterTransitions(nil)
+    Audio.noteShutterTransitions({})
+    check(#Audio.synths.impact.calls == 2, "p2 shutter: nil/leer kein Ton")
+end
+
+-- --- Pass 2: Brücken-End-Klick (einmalig, nach vollständigem Ausfahren) ----
+do
+    freshAudio()
+    Audio.resetRoom(1)
+    local m = Audio.synths.movement
+    check(#m.calls == 0, "p2 bridge: anfangs kein Klick")
+    Audio.playBridgeExtend()
+    local bTotal = Config.bridgeExtendStage1 + Config.bridgeExtendStage2 + Config.bridgeExtendStage3
+    Audio.update(bTotal - 0.01)
+    check(#m.calls == 0, "p2 bridge: kurz vor Ausfahren kein Klick")
+    Audio.update(0.02) -- über die Schwelle
+    check(#m.calls == 1, "p2 bridge: Klick nach vollständigem Ausfahren")
+    check(approx(m.calls[1].pitch, Config.audioBridgeSettleFreq), "p2 bridge: Klick-Frequenz")
+    Audio.update(1.0)
+    check(#m.calls == 1, "p2 bridge: kein Wiederholen (einmal pro Ausfahren)")
+    -- resetRoom räumt einen ausstehenden Klick (Raumwechsel vor Ablauf).
+    Audio.playBridgeExtend()
+    Audio.resetRoom(1)
+    Audio.update(1.0)
+    check(#m.calls == 1, "p2 bridge: resetRoom stoppt ausstehenden Klick")
+end
+
+-- --- Pass 2: Raumabschluss-Resonanz (pro Raum minimal tiefer) --------------
+do
+    freshAudio()
+    Audio.resetRoom(1)
+    Audio.playRoomCompletion(1)
+    Audio.playRoomCompletion(5)
+    local calls = Audio.synths.impact.calls
+    check(#calls == 2, "p2 completion: zwei Impulse")
+    check(approx(calls[1].pitch, Config.audioCompletionFreq), "p2 completion: Raum 1 Basis")
+    check(calls[2].pitch < calls[1].pitch, "p2 completion: Raum 5 tiefer/resonanter")
+    Audio.playRoomCompletion()
+    check(approx(Audio.synths.impact.calls[3].pitch, Config.audioCompletionFreq), "p2 completion: ohne Index = Basis")
+end
+
 TestReport.audio = { pass = pass, fail = fail }

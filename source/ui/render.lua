@@ -85,8 +85,38 @@ function Render.resetPlayerVisual()
         shutterSquintFramesRemaining = 0,
         wasBlockedLastFrame = false,         -- Flankenerkennung Shutter-Kollision
     }
+    -- Press-Animation der Schalter: keine Restzähler in neue Räume tragen.
+    Render.switchPressFrames = 0
+    Render.resetObjectAnims()
 end
+
+-- --- Transiente Objekt-Mikroanimationen (Atmosphäre, rein visuell) --------
+-- Per-Objekt-Zustände für kurze Übergangs-Animationen: Blenden-Überschwinger
+-- beim Schließen, Blenden-Einfahren beim Öffnen, Brücken-Stufen-Ausfahren mit
+-- 1-px-Nachsetzen und der Raumabschluss-Systemimpuls. Kein Gameplay, kein
+-- State, kein Undo-Eingriff. Wird bei jedem Raumstart (resetPlayerVisual) neu
+-- initialisiert.
+Render.shutterAnims = {}
+Render.bridgeAnims = {}
+Render.prevShutter = {}
+Render.prevBridge = {}
+Render.completionPulseT = nil -- Raumabschluss-Systemimpuls (nil = inaktiv)
+-- Finaler Raum-6-Moment: friert die Ghost-Drift ein, solange aktiv (rein visuell).
+Render.finalMomentActive = false
+Render.finalMomentDriftTime = nil
+
+function Render.resetObjectAnims()
+    Render.shutterAnims = {}
+    Render.bridgeAnims = {}
+    Render.prevShutter = {}
+    Render.prevBridge = {}
+    Render.completionPulseT = nil
+    Render.finalMomentActive = false
+    Render.finalMomentDriftTime = nil
+end
+-- Initialer Raumstart: setzt auch die Objekt-Animationen zurück.
 Render.resetPlayerVisual()
+Render.resetObjectAnims()
 
 -- --- Reine read-only Visual-Helfer (testbar) ------------------------------
 
@@ -154,6 +184,10 @@ end
 -- Camera-Transition, kein Raumabschluss). roomComplete optional (Tests).
 function Render.update(dt, roomComplete)
     Render.visualTime = Render.visualTime + dt
+    -- Schalter-Press-Animation: kurzer Frame-Zähler (nur echtes Umschalten).
+    if Render.switchPressFrames > 0 then
+        Render.switchPressFrames = Render.switchPressFrames - 1
+    end
     local pv = Render.playerVisual
 
     -- Blink-Abschluss erkennen (Zähler lief auf 0): neuen Termin planen.
@@ -182,6 +216,80 @@ function Render.update(dt, roomComplete)
             end
         end
     end
+
+    -- Objekt-Mikroanimationen + Raumabschluss-Impuls fortschreiben.
+    Render.updateObjectAnimations(dt)
+end
+
+-- Erkennt Zustandswechsel der Elemente und treibt die transiente Animations-
+-- Zustände (Blende/Brücke) sowie den Raumabschluss-Impuls fort.
+-- Rein visuell; die physischen Zustände (State/ElementStates) bleiben unangetastet.
+function Render.updateObjectAnimations(dt)
+    -- Blenden: Übergang zwischen closed <-> offen startet die Animation.
+    -- prev==nil ist der erste Frame nach Raumstart: nur Zustand merken, kein
+    -- Anim (kein Schein-Überschwinger beim Raumwechsel). +1 Frame, weil der
+    -- Abbau-Loop denselben Frame durchläuft (Startwert der Zeichnung:
+    -- close = voller Überschwinger, open = volle Breite).
+    for id, _ in pairs(room.shutters) do
+        local cur = Render.shutterVisualState(id)
+        local prev = Render.prevShutter[id]
+        if prev ~= nil then
+            if prev == "closed" and cur ~= "closed" then
+                Render.shutterAnims[id] = { kind = "open", frames = 5 }
+            elseif cur == "closed" and prev ~= "closed" then
+                Render.shutterAnims[id] = { kind = "close", frames = config.shutterOvershootFrames + 1 }
+            end
+        end
+        Render.prevShutter[id] = cur
+    end
+    -- Brücken/Gates: inactive -> active startet das Stufen-Ausfahren.
+    -- prev==nil (erster Frame) erzeugt kein Schein-Ausfahren.
+    for id, st in pairs(state.elementStates) do
+        local cur = st == true and "active" or "inactive"
+        local prev = Render.prevBridge[id]
+        if cur == "active" and prev == "inactive" then
+            Render.bridgeAnims[id] = { t = 0, p = 0, state = "extending", settleFrames = 0 }
+        end
+        Render.prevBridge[id] = cur
+    end
+    -- Blenden-Framezähler abbauen.
+    for id, a in pairs(Render.shutterAnims) do
+        a.frames = a.frames - 1
+        if a.frames <= 0 then
+            Render.shutterAnims[id] = nil
+        end
+    end
+    -- Brücken-Fortschritt (dt-basiert): 0->45% schnell, Pause, 45->100% schnell,
+    -- danach 1-px-Nachsetzen über config.bridgeSettleFrames.
+    for id, a in pairs(Render.bridgeAnims) do
+        if a.state == "extending" then
+            a.t = a.t + dt
+            local s1, s2, s3 = config.bridgeExtendStage1, config.bridgeExtendStage2, config.bridgeExtendStage3
+            if a.t < s1 then
+                a.p = (a.t / s1) * 0.45
+            elseif a.t < s1 + s2 then
+                a.p = 0.45
+            elseif a.t >= s1 + s2 + s3 then
+                a.p = 1
+                a.state = "settle"
+                a.settleFrames = config.bridgeSettleFrames
+            else
+                a.p = 0.45 + ((a.t - s1 - s2) / s3) * 0.55
+            end
+        elseif a.state == "settle" then
+            a.settleFrames = a.settleFrames - 1
+            if a.settleFrames <= 0 then
+                Render.bridgeAnims[id] = nil
+            end
+        end
+    end
+    -- Raumabschluss-Impuls: läuft einmal durch und verschwindet.
+    if Render.completionPulseT ~= nil then
+        Render.completionPulseT = Render.completionPulseT + dt
+        if Render.completionPulseT > config.completionPulseDuration then
+            Render.completionPulseT = nil
+        end
+    end
 end
 
 -- Merkt die letzte tatsächliche Bewegungsrichtung (actualDelta, nicht
@@ -204,8 +312,9 @@ function Render.notePlayerMovement(actualDelta)
 end
 
 -- Schalterkontakt: echter erfolgreicher Trigger durch Vorwärtsbewegung
--- (Room.movePlayer liefert switchChanges>0). Weitet das Auge kurz; Priorität
--- über Blink, unter Squint. Rein visuell, kein Gameplay-Effekt.
+-- (Room.movePlayer liefert switchChanges>0). Weitet das Auge kurz und drückt
+-- den Schalter für 2 Frames ein (mechanisches Klack). Priorität über Blink,
+-- unter Squint. Rein visuell, kein Gameplay-Effekt.
 function Render.noteSwitchContact()
     local pv = Render.playerVisual
     if pv.shutterSquintFramesRemaining <= 0
@@ -213,7 +322,34 @@ function Render.noteSwitchContact()
         and not Camera.isTransitioning() then
         pv.switchWidenFramesRemaining = config.switchEyeWidenFrames
         pv.blinkFramesRemaining = 0
+        pv.idleTime = 0
+        pv.nextBlinkAt = Render.pickBlinkInterval()
+        -- Press-Animation nur bei ECHTEM Umschalten (dieser Hook feuert nur
+        -- bei switchChanges>0): 2-Frame-Zähler für die eingedrückte Darstellung.
+        Render.switchPressFrames = config.switchPressFrames
     end
+end
+
+-- Raumabschluss-Systemimpuls (Atmosphäre): setzt einen kurzen Timer, während
+-- dessen drawRoom einen hellen, nach außen laufenden Impuls zeichnet. Wird vom
+-- Main im roomComplete-Pfad der Räume 1-5 und beim finalen Raum-6-Moment
+-- aufgerufen. Rein visuell; Progression/Timing bleiben unverändert.
+function Render.noteRoomComplete()
+    Render.completionPulseT = 0
+end
+
+-- Finaler Raum-6-Moment (Pass 2): die sichtbare Welt hält kurz inne. Friert die
+-- Ghost-Drift ein (zum ersten Mal wird alles still) und zeigt den Systemimpuls.
+-- Kein Gameplay-Effekt; endFinalMoment hebt den Zustand wieder auf.
+function Render.beginFinalMoment()
+    Render.finalMomentActive = true
+    Render.finalMomentDriftTime = Render.visualTime
+    Render.completionPulseT = 0
+end
+
+function Render.endFinalMoment()
+    Render.finalMomentActive = false
+    Render.finalMomentDriftTime = nil
 end
 
 -- Shutter-Kollision: echter blockierter Anstoß (Room.movePlayer -> blocked).
@@ -226,6 +362,8 @@ function Render.noteShutterBlocked(blocked)
             pv.shutterSquintFramesRemaining = config.shutterSquintFrames
             pv.blinkFramesRemaining = 0
             pv.switchWidenFramesRemaining = 0
+            pv.idleTime = 0
+            pv.nextBlinkAt = Render.pickBlinkInterval()
         end
         pv.wasBlockedLastFrame = true
     else
@@ -235,6 +373,8 @@ end
 
 -- Undo: keine neue Reaktion; vorhandene Squint/Widen/Blink auf neutral setzen,
 -- damit kein alter Feedbackzustand in den restaurierten State hineinragt.
+-- Außerdem werden die transienten Objekt-Animationen (Blende/Brücke, System-
+-- impuls) abgeräumt (Pass 2, §52): keine hängenden Anims aus dem alten Zustand.
 function Render.noteUndo()
     local pv = Render.playerVisual
     pv.blinkFramesRemaining = 0
@@ -243,6 +383,7 @@ function Render.noteUndo()
     pv.wasBlockedLastFrame = false
     pv.idleTime = 0
     pv.nextBlinkAt = Render.pickBlinkInterval()
+    Render.resetObjectAnims()
 end
 
 -- Aktuelle Augenreaktion nach Priorität: Squint > Widen > Blink > normal.
@@ -284,6 +425,20 @@ function Render.playerScreenPosition()
     return x, y, angle
 end
 
+-- Pupillen-Nachlauf (normierter Wert in [-1,1]): rein visuell, kein
+-- Gameplay-Einfluss. Ohne geladenes Motion-Modul (Fallback) basiert die
+-- Pupille auf playerVisual.facing (1:1 der alte Look, nur mit pupilTravel).
+function Render.pupilLagOffset()
+    if Motion == nil or Motion.getLag == nil then
+        return Render.playerVisual.facing or 0
+    end
+    local lag = Motion.getLag() or 0
+    local maxLag = config.motionMaxPxPerFrame or 3
+    local n = lag / maxLag
+    if n > 1 then n = 1 elseif n < -1 then n = -1 end
+    return n
+end
+
 function Render.playerEyePosition()
     local radius = Render.playerRadius()
     local angle = state.player.angle
@@ -292,8 +447,27 @@ function Render.playerEyePosition()
     end
     local x, y = geo.polar(config.centerX, config.centerY, radius, angle)
     local rad = math.rad(angle)
-    local off = Render.playerVisual.facing * 1.0
-    return x + off * math.cos(rad), y + off * math.sin(rad)
+    -- Pupillen-Versatz folgt der Facing-Richtung (bzw. Motion-Lag, falls
+    -- geladen) und skaliert auf max pupilTravel. Max-Auslenkung = pupilTravel.
+    local off = Render.pupilLagOffset() * config.pupilTravel
+    local px = x + off * math.cos(rad)
+    local py = y + off * math.sin(rad)
+    -- Idle-Core-Blick (Atmosphäre): nach längerem Stillstand wandert die
+    -- Pupille langsam Richtung Kern und zurück (einzelner Sinus-Halbwellen-
+    -- Zyklus, danach Pause). Deterministisch, rein visuell.
+    local idle = Render.playerVisual.idleTime
+    if idle > config.idleGazeDelay then
+        local g = math.max(0, math.sin((idle - config.idleGazeDelay) / config.idleGazeCycle * math.pi))
+        if g > 0 then
+            local dx, dy = config.centerX - x, config.centerY - y
+            local len = math.sqrt(dx * dx + dy * dy)
+            if len > 0.01 then
+                px = px + dx / len * config.idleGazeTravel * g
+                py = py + dy / len * config.idleGazeTravel * g
+            end
+        end
+    end
+    return px, py
 end
 
 -- Ghost-Ringnummern (reine Berechnung): äußere World-Ringnummern der
@@ -317,9 +491,14 @@ function Render.coreRadius(currentRoomIndex)
     return config.coreRadius + (idx - 1) * config.coreGrowthPerRoom
 end
 
--- Aktueller Pulsations-Offset des Kerns (sinusförmig, rein visuell).
+-- Aktueller Pulsations-Offset des Kerns (rein visuell): organisches Atmen aus
+-- einer langsamen Hauptwelle plus einer sehr kleinen, langsameren Atemwelle.
+-- Deterministisch (reine Funktion von visualTime), kein Zufall.
 function Render.corePulseOffset()
-    return math.sin(Render.visualTime * 2 * math.pi / config.corePulsePeriod) * config.corePulseAmplitude
+    local t = Render.visualTime
+    local main = math.sin(t * 2 * math.pi / config.corePulsePeriod) * config.corePulseAmplitude
+    local slow = math.sin(t * 2 * math.pi / config.corePulsePeriod2) * config.corePulseAmplitude2
+    return main + slow
 end
 
 -- Baut den temporären Controller->Element-Lookup: elementId -> Symbol des
@@ -418,10 +597,22 @@ end
 local function drawGhostRings(currentRoomIndex)
     gfx.setColor(WHITE)
     gfx.setLineWidth(1)
+    local gi = 0
     for _, ringNumber in ipairs(Render.ghostRingNumbers(currentRoomIndex)) do
+        gi = gi + 1
         local radius = Camera.getRadius(ringNumber)
         if radius > config.outerRadius then
             gfx.drawCircleAtPoint(config.centerX, config.centerY, radius)
+            -- Extreme langsame Drift: kleine schwarze Indexmarke wandert auf
+            -- der weißen Linie gegenläufig (deterministisch, rein visuell).
+            local spd = config.ghostDriftSpeeds[gi] or 0.05
+            local dir = config.ghostDriftDirections[gi] or -1
+            -- Finaler Raum-6-Moment: Drift eingefroren (statische Zeitbasis).
+            local t = Render.finalMomentActive and Render.finalMomentDriftTime or Render.visualTime
+            local drift = math.fmod(t * spd * dir, 360)
+            gfx.setColor(BLACK)
+            gfx.drawArc(config.centerX, config.centerY, radius, drift, geo.norm(drift + config.ghostMarkDotDeg))
+            gfx.setColor(WHITE)
         end
     end
     gfx.setLineWidth(1)
@@ -452,33 +643,54 @@ end
 local function drawShutter(sh, previewOn)
     local visual = Render.shutterVisualState(sh.id)
     local radius = Render.ringRadius(sh.ring)
+    local anim = Render.shutterAnims[sh.id]
     local startAngle = geo.norm(sh.angle - config.shutterArcWidth / 2)
     local endAngle = geo.norm(sh.angle + config.shutterArcWidth / 2)
     if visual == "closed" then
+        -- Mechanischer Überschwinger: beim Zuschnappen 1 px über die End-
+        -- position hinaus und über 2 Frames zurück (rein visuell, Kollision
+        -- und pendingClose bleiben unverändert).
+        local overDeg = 0
+        if anim and anim.kind == "close" then
+            local frac = anim.frames / config.shutterOvershootFrames
+            overDeg = config.shutterOvershootPx * frac * 180 / (math.pi * radius)
+        end
+        local sA = geo.norm(startAngle - overDeg)
+        local eA = geo.norm(endAngle + overDeg)
         -- Preview-Halo: zweite weiße Außenkontur 1 px weiter außen (14 px)
         if previewOn then
             gfx.setColor(WHITE)
             gfx.setLineWidth(config.trackWidth + 6)
-            gfx.drawArc(config.centerX, config.centerY, radius, startAngle, endAngle)
+            gfx.drawArc(config.centerX, config.centerY, radius, sA, eA)
             gfx.setLineWidth(1)
         end
         -- 1 px weiße Kontur (12-px-Bogen unter dem 10-px-Schwarzblock)
         gfx.setColor(WHITE)
         gfx.setLineWidth(config.trackWidth + 4)
-        gfx.drawArc(config.centerX, config.centerY, radius, startAngle, endAngle)
+        gfx.drawArc(config.centerX, config.centerY, radius, sA, eA)
         -- schwarzer Block (unterbricht die weiße Bahn)
         gfx.setColor(BLACK)
         gfx.setLineWidth(config.trackWidth + 2)
-        gfx.drawArc(config.centerX, config.centerY, radius, startAngle, endAngle)
+        gfx.drawArc(config.centerX, config.centerY, radius, sA, eA)
         -- zwei weiße Zähne an den Enden
         gfx.setColor(WHITE)
         gfx.setLineWidth(1)
-        local e1x, e1y = geo.polar(config.centerX, config.centerY, radius, startAngle)
-        local e2x, e2y = geo.polar(config.centerX, config.centerY, radius, endAngle)
+        local e1x, e1y = geo.polar(config.centerX, config.centerY, radius, sA)
+        local e2x, e2y = geo.polar(config.centerX, config.centerY, radius, eA)
         gfx.fillCircleAtPoint(e1x, e1y, 2)
         gfx.fillCircleAtPoint(e2x, e2y, 2)
     else
-        -- offen (auch pendingClose): Bahn bleibt weiß, zwei kleine Endmarken
+        -- offen (auch pendingClose): Bahn bleibt weiß, zwei kleine Endmarken.
+        -- Beim Öffnen zieht sich der schwarze Bogen schnell->langsam zurück.
+        if anim and anim.kind == "open" then
+            local rem = math.max(0, anim.frames / 4)
+            local w = config.shutterArcWidth * rem * rem -- schneller Start
+            gfx.setColor(BLACK)
+            gfx.setLineWidth(config.trackWidth + 2)
+            gfx.drawArc(config.centerX, config.centerY, radius,
+                geo.norm(sh.angle - w / 2), geo.norm(sh.angle + w / 2))
+            gfx.setColor(WHITE)
+        end
         if previewOn then
             -- 1-px-Außenkontur knapp außerhalb der Bahn über dem Blendbogen
             gfx.setColor(WHITE)
@@ -503,14 +715,31 @@ local function drawBridge(b, previewOn)
     local x2, y2 = geo.polar(config.centerX, config.centerY, innerR, b.angle)
     local visual = Render.bridgeVisualState(b.id)
     if visual == "active" then
+        -- Stufen-Ausfahren: die zwei Stummel wachsen 0->45% schnell, kurze
+        -- Pause, 45->100% schnell und setzen 1 px nach (KLACK). Rein visuell,
+        -- A-Input/Docking/Transitdauer bleiben unverändert.
+        local anim = Render.bridgeAnims[b.id]
+        local p = 1
+        local settle = 0
+        if anim then
+            p = anim.p or 1
+            if anim.state == "settle" then
+                settle = 1
+            end
+        end
+        local mid = (outerR + innerR) / 2
+        local c1x, c1y = geo.polar(config.centerX, config.centerY, outerR - (outerR - mid) * p, b.angle)
+        local c2x, c2y = geo.polar(config.centerX, config.centerY, innerR + (mid - innerR) * p, b.angle)
         if previewOn then
             gfx.setColor(WHITE)
-            gfx.setLineWidth(config.bridgeWidth + 2)
-            gfx.drawLine(x1, y1, x2, y2)
+            gfx.setLineWidth(config.bridgeWidth + 2 + settle)
+            gfx.drawLine(x1, y1, c1x, c1y)
+            gfx.drawLine(x2, y2, c2x, c2y)
         end
         gfx.setColor(WHITE)
-        gfx.setLineWidth(config.bridgeWidth)
-        gfx.drawLine(x1, y1, x2, y2)
+        gfx.setLineWidth(config.bridgeWidth + settle)
+        gfx.drawLine(x1, y1, c1x, c1y)
+        gfx.drawLine(x2, y2, c2x, c2y)
     else
         local a1x, a1y = geo.polar(config.centerX, config.centerY, outerR - config.stubLength, b.angle)
         local a2x, a2y = geo.polar(config.centerX, config.centerY, innerR + config.stubLength, b.angle)
@@ -593,27 +822,56 @@ local function drawArrowTip(cx, cy, dirx, diry, perpx, perpy, filled)
     end
 end
 
--- 8) Schalter: 11-px weiße Scheibe, schwarze Innenfläche, Symbol weiß auf
--- schwarz (Kontrastlösung), zwei tangentiale Pfeilspitzen am Rand (CW/CCW);
--- aktive Marke gefüllt, inaktive nur konturiert.
+-- 8) Schalter (rein visuell, mechanisch): kleine dunkle Nocke direkt IN der
+-- Ringbahn (Bahnhöhe), mit gerichteter weißer Kerbe/Spitze: Zustand A -> CW,
+-- Zustand B -> CCW (Asymmetrie ohne Text lesbar). Das kleine Verknüpfungs-
+-- symbol bleibt in der Nocke (optionaler Hinweis; die Form funktioniert auch
+-- ohne). Bei echtem Umschalten drückt sich der Schalter config.switchPress-
+-- Frames lang 1-2 px radial zur Ringmitte ein (config.switchPressOffset), nur
+-- am Schalter, an dem der Spieler steht (config.switchPressProximity).
 local function drawSwitch(sw)
     local radius = Render.ringRadius(sw.ring)
     local x, y = geo.polar(config.centerX, config.centerY, radius, sw.angle)
     local isA = Render.switchVisualState(sw.id) == "A"
     local rad = math.rad(sw.angle)
     local tanx, tany = math.cos(rad), math.sin(rad) -- tangential CW
-    local perpx, perpy = -tany, tanx                -- radial
+    local perpx, perpy = -tany, tanx                -- radial zur Ringmitte
 
-    gfx.setColor(WHITE)
-    gfx.fillCircleAtPoint(x, y, 5.5) -- 11 px Scheibe
+    -- Press-Offset: nur bei echtem Umschalten und wenn der Spieler an diesem
+    -- Schalter steht (kurzer 2-Frame-Zähler). 1-2 px nach innen, kein Rest.
+    local press = 0
+    if Render.switchPressFrames > 0
+        and state.player.ring == sw.ring
+        and math.abs(geo.delta(state.player.angle, sw.angle)) <= config.switchPressProximity then
+        press = config.switchPressOffset
+    end
+    -- Vor-Kontakt-Spannung (Atmosphäre): nähert sich der Spieler dem Schalter
+    -- von außen (zwischen Blendrand und Vor-Kontakt-Bereich), spannt sich die
+    -- Nocke 1 px tangential in seine Richtung an. Rein visuell, kein Hook.
+    local lash = 0
+    if press == 0 and state.player.ring == sw.ring then
+        local d = geo.delta(state.player.angle, sw.angle)
+        local absD = math.abs(d)
+        local preDeg = config.switchPreContactRangePx * 180 / (math.pi * radius)
+        if absD > config.switchArcWidth / 2 and absD <= config.switchArcWidth / 2 + preDeg then
+            local signD = d > 0 and -1 or 1
+            lash = config.switchPreContactLash * signD
+        end
+    end
+    local bx, by = x + perpx * press + tanx * lash, y + perpy * press + tany * lash
+
+    -- Grundkörper: dunkle Nocke auf der weißen Bahn.
     gfx.setColor(BLACK)
-    gfx.fillCircleAtPoint(x, y, 3)   -- schwarze Innenfläche
-    -- Symbol weiß auf der schwarzen Innenfläche (lesbar)
-    Render.drawSymbol(sw.symbol, x, y, 4, WHITE)
-    -- tangentiale Pfeilspitzen: CW aktiv bei Zustand A, CCW aktiv bei B
+    gfx.fillCircleAtPoint(bx, by, config.switchBodyRadius)
+    -- Richtungsspitze (weiße Kerbe in der Nocke): A -> CW, B -> CCW.
+    local dir = isA and 1 or -1
     gfx.setColor(WHITE)
-    drawArrowTip(x + tanx * 4, y + tany * 4, tanx, tany, perpx, perpy, isA)
-    drawArrowTip(x - tanx * 4, y - tany * 4, -tanx, -tany, perpx, perpy, not isA)
+    drawArrowTip(
+        bx + tanx * dir * (config.switchBodyRadius - 1.5),
+        by + tany * dir * (config.switchBodyRadius - 1.5),
+        tanx * dir, tany * dir, perpx, perpy, true)
+    -- Kleines Verknüpfungssymbol (weiß) in der Nocke (optionaler Hinweis).
+    Render.drawSymbol(sw.symbol, bx, by, 3, WHITE)
     gfx.setColor(WHITE)
 end
 
@@ -671,34 +929,53 @@ local function fillOval(x, y, angle, rLong, rShort, color)
     gfx.fillPolygon(table.unpack(pts))
 end
 
--- 10) Spieler: 7-px-Scheibe (weiß, 1-px schwarze Kontur, 3-px-Auge tangential
--- in Facing-Richtung). Bei Bridge-Transit wird der Körper radial zur Ellipse
--- gestreckt (Start/Ende Kreis, Mitte maximale Streckung; keine Hitboxände-
--- rung). Die Augenform folgt der Reaktionspriorität Squint > Widen > Blink >
--- normal; das Auge bleibt auch während der Streckung sichtbar.
+-- 10) Spieler (neue Figur): 12-px-Kugel (weiß), 2-px schwarze Kontur, weißer
+-- Halo außerhalb der Kontur (~1,5 px), 5-px-Pupille (schwarz, tangential in
+-- Facing-Richtung versetzt). Wirkt wie eine Kugel in einem mechanischen Lager.
+-- Bei Bridge-Transit wird der Körper radial zur Ellipse gestreckt (Start/Ende
+-- Kreis, Mitte maximale Streckung; keine Hitboxänderung). Die Augenform folgt
+-- der Reaktionspriorität Squint > Widen > Blink > normal; das Auge bleibt auch
+-- während der Streckung sichtbar.
 local function drawPlayer()
     local crossing = Bridge.isCrossing()
     local x, y, angle = Render.playerScreenPosition()
 
-    -- Körper
+    -- Radien der visuellen Schichten (Kugel -> Kontur -> Halo)
+    local rBall = config.playerRadius
+    local rContour = rBall + config.playerStroke
+    local rHalo = rContour + config.playerHalo
+
+    -- Reaktion früh bestimmen (Körperform kann von Squint abhängen).
+    local reaction = Render.currentEyeReaction()
+
+    -- Körper (Halo außen, dann Kontur, dann Kugel; Überlagerung ergibt die
+    -- konzentrischen Ringe)
     if crossing then
         local stretch = Render.bridgeStretch(Bridge.getTransitProgress())
-        local halfLen = config.playerDiameter / 2 + stretch
-        local halfWid = math.max(2.5, config.playerDiameter / 2 - stretch * 0.25)
-        fillOval(x, y, angle, halfLen + 1, halfWid + 1, BLACK) -- 1-px Kontur
-        fillOval(x, y, angle, halfLen, halfWid, WHITE)
+        local sh = math.max(2.5, stretch * 0.25)
+        fillOval(x, y, angle, rHalo + stretch, rHalo - sh, WHITE)      -- Halo
+        fillOval(x, y, angle, rContour + stretch, rContour - sh, BLACK) -- Kontur
+        fillOval(x, y, angle, rBall + stretch, rBall - sh, WHITE)       -- Kugel
+    elseif reaction == "squint" then
+        -- Impact-Kompression (Atmosphäre): Körper kurz 1 px radial gestaucht,
+        -- tangential unverändert. Nur 2-6 Frames, keine Positionsänderung.
+        local comp = 1
+        fillOval(x, y, angle, rHalo - comp, rHalo, WHITE)
+        fillOval(x, y, angle, rContour - comp, rContour, BLACK)
+        fillOval(x, y, angle, rBall - comp, rBall, WHITE)
     else
         gfx.setColor(WHITE)
-        gfx.fillCircleAtPoint(x, y, config.playerDiameter / 2)
+        gfx.fillCircleAtPoint(x, y, rHalo)
         gfx.setColor(BLACK)
-        gfx.drawCircleAtPoint(x, y, config.playerDiameter / 2)
+        gfx.fillCircleAtPoint(x, y, rContour)
+        gfx.setColor(WHITE)
+        gfx.fillCircleAtPoint(x, y, rBall)
     end
 
-    -- Auge (bleibt während Streckung sichtbar)
+    -- Pupille/Auge (bleibt während Streckung sichtbar)
     local ex, ey = Render.playerEyePosition()
     local rad = math.rad(angle)
     local tx, ty = math.cos(rad), math.sin(rad) -- tangential CW
-    local reaction = Render.currentEyeReaction()
     if reaction == "squint" then
         -- Zusammenkneifen: kurze schmale tangentiale Lidlinie
         gfx.setColor(BLACK)
@@ -706,9 +983,9 @@ local function drawPlayer()
         gfx.drawLine(ex - tx * 2, ey - ty * 2, ex + tx * 2, ey + ty * 2)
         gfx.setLineWidth(1)
     elseif reaction == "widen" then
-        -- Augenweiten: größeres Auge (5 px), Körper bleibt Kreis
+        -- Augenweiten: größere Pupille
         gfx.setColor(BLACK)
-        gfx.fillCircleAtPoint(ex, ey, 2.5)
+        gfx.fillCircleAtPoint(ex, ey, config.pupilRadius + 1)
     elseif reaction == "blink" then
         -- Blink: geschlossene Lidlinie (kürzer als Squint)
         gfx.setColor(BLACK)
@@ -716,9 +993,9 @@ local function drawPlayer()
         gfx.drawLine(ex - tx * 1.5, ey - ty * 1.5, ex + tx * 1.5, ey + ty * 1.5)
         gfx.setLineWidth(1)
     else
-        -- normal: 3-px-Auge
+        -- normal: 5-px-Pupille
         gfx.setColor(BLACK)
-        gfx.fillCircleAtPoint(ex, ey, 1.5)
+        gfx.fillCircleAtPoint(ex, ey, config.pupilRadius)
     end
     gfx.setColor(WHITE)
 end
@@ -772,6 +1049,28 @@ end
 -- Zeichnet den aktuellen Raumzustand in der verbindlichen Reihenfolge.
 -- Read-only gegenüber Gameplay. currentRoomIndex wird nur als
 -- Darstellungsinformation gelesen (Kernwachstum, Geisterringe).
+
+-- Raumabschluss-Systemimpuls (Atmosphäre): kurzer heller Impuls läuft nach dem
+-- Lösen eines Raums (Räume 1-5 und finaler Raum-6-Moment) als 2-px-Ring vom
+-- Kern zum Außenring. Wird am Beginn der Camera-Transition gezeichnet;
+-- Progression/Timing bleiben unverändert.
+local function drawCompletionPulse(currentRoomIndex)
+    if Render.completionPulseT == nil then
+        return
+    end
+    local t = Render.completionPulseT
+    local dur = config.completionPulseDuration
+    local p = t / dur
+    if p > 1 then p = 1 end
+    local from = Render.coreRadius(currentRoomIndex)
+    local to = Render.ringRadius("outer")
+    local radius = from + (to - from) * p
+    gfx.setColor(WHITE)
+    gfx.setLineWidth(2)
+    gfx.drawCircleAtPoint(config.centerX, config.centerY, radius)
+    gfx.setLineWidth(1)
+end
+
 function Render.drawRoom(roomComplete, currentRoomIndex)
     -- Preview-Set und Blinkphase einmal pro Frame bestimmen (rein visuell).
     local previewSet = Render.previewElementIds(roomComplete)
@@ -812,6 +1111,8 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     end
     -- 9) Elementmarken (bleiben über den Preview-Halos)
     drawElementMarks()
+    -- 9b) Raumabschluss-Impuls (Atmosphäre): über den Bahnen, unter dem Spieler.
+    drawCompletionPulse(currentRoomIndex)
     -- 10) Spieler (bleibt ganz oben)
     drawPlayer()
     -- 11) B-Hold-Restart-Fortschrittsring (direkt um die Figur, 1-px-Bogen von
@@ -820,7 +1121,9 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     drawRestartHoldRing()
     drawCrankOverlay(roomComplete)
 
-    if roomComplete then
+    -- „ROOM COMPLETE" nur außerhalb des finalen Raum-6-Stillstands (dort soll
+    -- die Welt ruhig stehen, ohne Spieltext).
+    if roomComplete and not Render.finalMomentActive then
         gfx.setColor(WHITE)
         gfx.drawText("ROOM COMPLETE", 150, 30)
     end

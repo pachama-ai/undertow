@@ -183,6 +183,14 @@ function Room.movePlayer(wantedDelta)
         return 0, result
     end
 
+    -- Physischer Blendenzustand vor der Bewegung (Pass 2): Grundlage für die
+    -- Audio-Transitions-Exposition (welche Blende hat sich in diesem Frame
+    -- geöffnet/geschlossen). Reine Event-Exposition, keine Mechanikänderung.
+    local shutterBefore = {}
+    for id, phys in pairs(Room.shutters) do
+        shutterBefore[id] = phys.collisionActive
+    end
+
     -- Snapshot am Frame-Anfang, VOR jeder Bewegung.
     local frameStartSnapshot = state.snapshot()
     local undoStored = false
@@ -273,9 +281,25 @@ function Room.movePlayer(wantedDelta)
     -- verlassen hat). Ist idempotent, wenn bereits im Loop synchronisiert wurde.
     Room.syncPhysicalShutters()
 
+    -- Blenden-Transitions (Pass 2, reine Event-Exposition für Audio): nach der
+    -- Bewegung, deterministisch in Levelreihenfolge. opened = (war zu, jetzt
+    -- offen); geschlossen = (war offen, jetzt zu). Kein Mechanik-Effekt.
+    local shutterTransitions = {}
+    for _, sh in ipairs(state.room.shutters) do
+        local phys = Room.shutters[sh.id]
+        local before = shutterBefore[sh.id]
+        if before ~= phys.collisionActive then
+            shutterTransitions[#shutterTransitions + 1] = {
+                id = sh.id,
+                opened = (phys.collisionActive == false),
+            }
+        end
+    end
+
     result.blocked = blocked
     result.switchChanges = switchChanges
     result.undoStored = undoStored
+    result.shutterTransitions = shutterTransitions
     return actual * direction, result
 end
 

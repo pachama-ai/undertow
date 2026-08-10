@@ -627,4 +627,28 @@ do
     check(Undo.count() == 1, "kein-wiedereintritt: G7 erzeugt keinen zusätzlichen Undo")
 end
 
+-- Pass 2: Blenden-Transitions im movePlayer-Resultat (reine Event-Exposition)
+do
+    State.init(makeRoom()) -- S1=B -> D1 offen; S2=B -> D2 zu; Spieler @10
+    Room.init()
+    Undo.clear()
+    Room.syncPhysicalShutters()
+    check(Room.shutters["D1"].collisionActive == false, "p2 shutter-expo: D1 anfangs offen")
+    -- CW über S1: S1 -> A, D1 wird logisch zu; Spieler außerhalb des D1-Bogens
+    -- (D1@90, Arc [77,103]) -> D1 wird collisionActive (geschlossen).
+    local actual, result = Room.movePlayer(120)
+    check(actual == 67, "p2 shutter-expo: Stop an D1-Eintrittskante (77)")
+    check(result.blocked == true, "p2 shutter-expo: blockiert")
+    local foundD1 = nil
+    if result.shutterTransitions then
+        for _, t in ipairs(result.shutterTransitions) do
+            if t.id == "D1" then foundD1 = t end
+        end
+    end
+    check(foundD1 ~= nil and foundD1.opened == false, "p2 shutter-expo: D1 als geschlossen gemeldet")
+    -- Keine Bewegung -> kein Feld/keine Transitions.
+    local _, r2 = Room.movePlayer(0)
+    check(r2.shutterTransitions == nil, "p2 shutter-expo: keine Bewegung -> kein Feld")
+end
+
 TestReport.movement = { pass = pass, fail = fail }

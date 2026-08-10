@@ -231,6 +231,24 @@ do
     check(Camera.getRadius(R6_INNER) == Config.innerRadius, "5->6: neuer inner 68")
 end
 
+-- --- Pass 2: Initial-Hold (kurze Ruhe vor der Raumtransition) ---------------
+do
+    Camera.init(R1_OUTER)
+    Camera.beginRoomTransition(R1_OUTER, R1_INNER, R2_OUTER, R2_INNER, 0.1)
+    -- Während des Holds: keine Kamerabewegung, Progress 0.
+    Camera.update(0.05)
+    check(Camera.isTransitioning() == true, "p2 hold: noch in Transition")
+    check(approx(Camera.getProgress(), 0), "p2 hold: Progress 0 während Hold")
+    check(Camera.getCurrentOuterRing() == R1_OUTER, "p2 hold: alter Ring stabil")
+    check(Camera.getVisualOuterRing() == R1_OUTER, "p2 hold: Kamera hält Ausgangsposition")
+    -- Nach dem Hold beginnt die Interpolation.
+    Camera.update(0.05)
+    check(Camera.getProgress() ~= nil and Camera.getProgress() > 0, "p2 hold: nach Hold startet Transition")
+    -- Gesamtdauer = Hold + cameraDuration.
+    Camera.update(Config.cameraDuration)
+    check(Camera.getCurrentOuterRing() == R2_OUTER, "p2 hold: Zielring nach Hold + Dauer")
+end
+
 -- --- Pflicht-Test: Raum 6 stabil (Finalraum, keine Transition ohne Gate) ----
 do
     Camera.init(R6_OUTER) -- Raum 6: outer 2, inner 1

@@ -115,8 +115,12 @@ end
 --   - fromInnerRing muss == toOuterRing sein (gemeinsamer Ring; die Kamera
 --     ersetzt keinen Ring durch eine andere Nummer)
 --   - Ringpaare müssen benachbart sein (Datenkonvention: inner == outer - 1)
+-- hold (optional, Sekunden): initialer Stillstand VOR der eigentlichen
+-- Transition (Atmosphäre: kurze visuelle Ruhe nach dem Raumabschluss-Impuls,
+-- §22). Während des Holds liefert getProgress 0 (die Kamera hält die alte
+-- Ringposition); die Zeit läuft nicht in die Interpolation.
 -- Rückgabe: true bei Erfolg, false wenn bereits eine Transition läuft.
-function Camera.beginRoomTransition(fromOuterRing, fromInnerRing, toOuterRing, toInnerRing)
+function Camera.beginRoomTransition(fromOuterRing, fromInnerRing, toOuterRing, toInnerRing, hold)
     if Camera.isTransitioning() then
         return false
     end
@@ -136,18 +140,27 @@ function Camera.beginRoomTransition(fromOuterRing, fromInnerRing, toOuterRing, t
         toOuterRing = toOuterRing,
         toInnerRing = toInnerRing,
         elapsed = 0,
+        hold = hold or 0,
         duration = config.cameraDuration,
     }
     return true
 end
 
--- Schaltet die Transition weiter. Abschluss genau einmal bei raw >= 1:
+-- Schaltet die Transition weiter. Erst der Initial-Hold (ohne Bewegung), dann
+-- die Interpolation. Abschluss genau einmal bei raw >= 1:
 -- currentOuterRing = toOuterRing, transition = nil. Kein Overshoot.
 function Camera.update(dt)
     if not Camera.isTransitioning() then
         return
     end
     local t = Camera.transition
+    -- Initial-Hold: Kamera hält die Ausgangsposition; elapsed bleibt 0.
+    if t.hold > 0 then
+        t.hold = t.hold - dt
+        if t.hold > 0 then
+            return
+        end
+    end
     t.elapsed = t.elapsed + dt
     -- Abschluss genau einmal, tolerant gegen Float-Akkumulation (keine
     -- Floating-Reste: currentOuterRing exakt auf den Zielring).

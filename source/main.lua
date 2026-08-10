@@ -80,6 +80,10 @@ local appMode = "menu"
 -- Minimaler lokaler Raumcontrollerzustand (kein Levelmanager).
 local currentRoomIndex = 1
 local roomComplete = false
+-- Finaler Raum-6-Moment (Pass 2): Frame-Zähler für den kurzen Stillstand vor
+-- dem Outro (nil = nicht aktiv). Währenddessen ist die Eingabe gesperrt und
+-- die Welt steht (Ghost-Drift eingefroren).
+local finalHoldFrames = nil
 
 -- Vom Playdate-Systemmenü angefordete Aktion (Phase 10.3). Die Callbacks
 -- registrieren hier NUR einen Wunsch ("restartRoom" | "mainMenu"); verarbeitet
@@ -215,16 +219,30 @@ local function handleConnectionResult(result)
             local fromInner = state.room.rings.inner
             currentRoomIndex = nextIndex
             startRoom(currentRoomIndex)
-            camera.beginRoomTransition(fromOuter, fromInner, state.room.rings.outer, state.room.rings.inner)
+            -- Atmosphäre (Pass 2): kurze visuelle Ruhe (0.1 s) über den Kamera-
+            -- Initial-Hold, BEVOR die Raumtransition startet (der neue Raum
+            -- steht kurz komprimiert, dann fährt die Kamera ein). Progression
+            -- unverändert: kein Menü, kein Startscreen zwischen den Räumen.
+            camera.beginRoomTransition(fromOuter, fromInner, state.room.rings.outer, state.room.rings.inner, config.completionPause)
+            -- Atmosphäre: kurzer Systemimpuls (visuell + klanglich) am Beginn
+            -- des Raumwechsels. Nach startRoom, damit der Reset die Timer nicht
+            -- überschreibt; rein visuell, Progression unverändert. Der Klang
+            -- wird pro gelöstem Raum minimal tiefer/resonanter.
+            render.noteRoomComplete()
+            audio.playRoomCompletion(nextIndex - 1)
         else
             -- Raum 6 finales Gate -> finaler Gameplay-Abschluss + Outro.
             -- roomComplete bleibt interner Zustand; die Gameplaypipeline läuft
-            -- danach nicht weiter (Outro-Modus sperrt alle Eingaben; Punkt 14).
-            -- Kein Room7, kein Save7, highestRoom bleibt 6.
+            -- danach nicht weiter. Kein Room7, kein Save7, highestRoom bleibt 6.
+            -- Atmosphäre (Pass 2): kurzer mechanischer Systemimpuls wie in
+            -- 1-5, dann hält die Welt einen Moment still (Ghost-Drift stoppt,
+            -- Eingabe gesperrt), BEVOR das Outro startet. Kein Startscreen.
             roomComplete = true
             render.resetPlayerVisual()
             audio.setCompleted()
-            startOutro()
+            render.beginFinalMoment()
+            audio.playRoomCompletion(currentRoomIndex)
+            finalHoldFrames = config.finalHoldFrames
         end
     end
 end
@@ -320,6 +338,19 @@ end
 --   2) Bewegung (Player -> Room.movePlayer)
 --   3) A-Aktion (nach der Bewegung, an der tatsächlich erreichten Position)
 local function updateRoom()
+    -- Finaler Raum-6-Moment (Pass 2): kurzer Stillstand vor dem Outro. Alle
+    -- Eingaben gesperrt (auch B-Restart/Undo); die Welt steht (Ghost-Drift
+    -- eingefroren). Danach startet das Outro genau einmal.
+    if finalHoldFrames ~= nil then
+        finalHoldFrames = finalHoldFrames - 1
+        if finalHoldFrames <= 0 then
+            finalHoldFrames = nil
+            render.endFinalMoment()
+            startOutro()
+        end
+        return
+    end
+
     -- 0) B-Geste (Phase 10.4): kurz = Undo (auf Release), 0,6 s = Restart.
     --    Läuft in ALLEN Game-Zuständen, damit ein Hold auch während Bridge/
     --    Camera/Completion einen Restart auslösen kann (Metaaktion wie der
@@ -415,7 +446,9 @@ local function updateRoom()
         -- echter blockierter Anstoß -> Zusammenkneifen + Aufprall (Flanke).
         if moveResult.switchChanges > 0 then
             render.noteSwitchContact()
-            audio.playSwitchSnap()
+            -- Pass 2: A/B leicht unterschiedlich (actualDelta>0 = CW -> A,
+            -- actualDelta<0 = CCW -> B); man hört die Umschaltrichtung.
+            audio.playSwitchSnap(actualDelta > 0)
         end
         -- Brücke ausfahren: für jede echte Elementänderung einer normalen
         -- Brücke false->true (freie Brücken und das Gate zählen nicht).
@@ -432,6 +465,9 @@ local function updateRoom()
         end
         render.noteShutterBlocked(moveResult.blocked)
         audio.noteShutterBlocked(moveResult.blocked)
+        -- Pass 2: Blenden-Körperton beim tatsächlichen Öffnen/Schließen
+        -- (Schließen tiefer/härter, Öffnen etwas höher und leiser).
+        audio.noteShutterTransitions(moveResult.shutterTransitions)
     else
         room.updateDockAssist()
         -- Kein Bewegungsversuch in diesem Frame: keine Kollision.
@@ -524,7 +560,7 @@ function playdate.update()
     -- Startet eine Aktion das Spiel, wird im selben Frame kein Menü-Frame
     -- mehr gezeichnet (kein veralteter Menü-Rest).
     if appMode == "menu" then
-        local action = Menu.update()
+        local action = Menu.update(FRAME_DT)
         if action ~= nil then
             handleMenuAction(action)
         end

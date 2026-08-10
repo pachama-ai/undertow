@@ -69,6 +69,13 @@ end
 local my1 = Config.menuEntryY1 + math.floor(Config.menuFontHeight / 2)
 local my2 = Config.menuEntryY2 + math.floor(Config.menuFontHeight / 2)
 
+-- Zeigt das Menü und schließt die Startanimation sofort ab (für die Eingabe-/
+-- Zeichentests; die Intro-Logik wird separat getestet).
+local function showMenuReady()
+    Menu.show()
+    Menu.update(Config.menuIntroDuration + 1)
+end
+
 -- --- initial aktiv + Initialauswahl Weiter ---------------------------------
 Menu.init()
 Menu.show()
@@ -82,8 +89,34 @@ check(Menu.getEntryLabel(2) == "Von vorn", "menu: Eintrag 2 = Von vorn")
 check(Menu.getEntryAction(1) == "continue", "menu: Aktion 1 = continue")
 check(Menu.getEntryAction(2) == "restart", "menu: Aktion 2 = restart")
 
--- --- Down: Weiter -> Von vorn ----------------------------------------------
+-- --- Startanimation (Intro) ------------------------------------------------
 Menu.show()
+check(Menu.isIntroDone() == false, "menu-intro: nach show noch nicht fertig")
+Menu.update(0.1) -- 0,1 s
+check(Menu.isIntroDone() == false, "menu-intro: nach 0,1 s noch nicht fertig")
+-- Up/Down während der Intro ändern die Auswahl nicht (Einträge unsichtbar).
+pressed = {}
+press(playdate.kButtonDown)
+check(Menu.update(0.1) == nil, "menu-intro: Down während Intro -> kein Effekt")
+check(Menu.getSelectedIndex() == 1, "menu-intro: Auswahl bleibt 1 während Intro")
+-- A überspringt das Intro, löst aber KEINE Aktion aus (kein Doppel-Trigger).
+pressed = {}
+press(playdate.kButtonA)
+check(Menu.update(0.1) == nil, "menu-intro: A überspringt Intro ohne Aktion")
+check(Menu.isIntroDone() == true, "menu-intro: nach A-Skip fertig")
+-- Nach dem Skip funktioniert die normale Eingabe wieder.
+pressed = {}
+press(playdate.kButtonDown)
+check(Menu.update(0.1) == nil, "menu-intro: Down nach Intro -> kein A")
+check(Menu.getSelectedIndex() == 2, "menu-intro: Down nach Intro -> Von vorn")
+-- Vollständiger Ablauf: nach menuIntroDuration ist das Intro fertig.
+Menu.show()
+local introSteps = math.ceil(Config.menuIntroDuration / 0.1) + 1
+for _ = 1, introSteps do Menu.update(0.1) end
+check(Menu.isIntroDone() == true, "menu-intro: nach vollem Ablauf fertig")
+
+-- --- Down: Weiter -> Von vorn ----------------------------------------------
+showMenuReady()
 pressed = {}
 press(playdate.kButtonDown)
 check(Menu.update() == nil, "menu: Down ohne A -> nil")
@@ -96,7 +129,7 @@ check(Menu.update() == nil, "menu: Up ohne A -> nil")
 check(Menu.getSelectedIndex() == 1, "menu: Up -> Weiter")
 
 -- --- Wraparound ------------------------------------------------------------
-Menu.show() -- Index 1 (Weiter)
+showMenuReady() -- Index 1 (Weiter)
 pressed = {}
 press(playdate.kButtonUp)
 Menu.update()
@@ -107,7 +140,7 @@ Menu.update()
 check(Menu.getSelectedIndex() == 1, "menu: Von vorn Down (Wrap) -> Weiter")
 
 -- --- A auf Weiter -> continue, genau einmal --------------------------------
-Menu.show() -- Index 1
+showMenuReady() -- Index 1
 pressed = {}
 press(playdate.kButtonA)
 local a1 = Menu.update()
@@ -115,7 +148,7 @@ check(a1 == "continue", "menu: A auf Weiter -> continue")
 check(Menu.update() == nil, "menu: A nur einmal (kein Doppel-Trigger)")
 
 -- --- A auf Von vorn -> restart ---------------------------------------------
-Menu.show()
+showMenuReady()
 pressed = {}
 press(playdate.kButtonDown)
 Menu.update()
@@ -124,7 +157,7 @@ press(playdate.kButtonA)
 check(Menu.update() == "restart", "menu: A auf Von vorn -> restart")
 
 -- --- B: keine Aktion, Auswahl unverändert ----------------------------------
-Menu.show()
+showMenuReady()
 pressed = {}
 press(playdate.kButtonB)
 local beforeB = Menu.getSelectedIndex()
@@ -138,7 +171,7 @@ pressed = {}
 press(playdate.kButtonDown)
 press(playdate.kButtonA)
 check(Menu.update() == nil, "menu: inaktiv -> update nil")
-Menu.show()
+showMenuReady()
 
 -- --- Read-only / kein Gameplay während Menü --------------------------------
 State.init(Levels[1])
@@ -147,7 +180,7 @@ Undo.clear()
 Bridge.resetTransit()
 Room.resetDockAssist()
 Camera.init(7)
-Menu.show()
+showMenuReady()
 local swBefore = {}
 for k, v in pairs(State.switchStates) do swBefore[k] = v end
 local elBefore = {}
@@ -185,7 +218,7 @@ check(elSame, "menu read-only: elementStates unverändert")
 
 -- --- GFX-Mock: Zeichnung ----------------------------------------------------
 -- schwarzer Hintergrund + Eintragstexte + Ringgrafik + ringförmige Markierung
-Menu.show() -- Index 1
+showMenuReady() -- Index 1
 pressed = {}
 mockG = makeGfxMock()
 playdate.graphics = mockG
@@ -211,7 +244,7 @@ check(filledMarkerY == my1, "menu draw: Marker gefüllt an Weiter (aktiv)")
 check(emptyMarkerY == my2, "menu draw: Marker leer an Von vorn (inaktiv)")
 
 -- Auswahlwechsel -> Marker wechselt
-Menu.show()
+showMenuReady()
 pressed = {}
 press(playdate.kButtonDown)
 Menu.update()
@@ -227,7 +260,7 @@ check(emptyMarkerY == my1, "menu draw: Marker leer an Weiter (inaktiv)")
 playdate.graphics = realGraphics
 
 -- --- draw read-only: Auswahl unverändert -----------------------------------
-Menu.show()
+showMenuReady()
 local idxBefore = Menu.getSelectedIndex()
 mockG = makeGfxMock()
 playdate.graphics = mockG

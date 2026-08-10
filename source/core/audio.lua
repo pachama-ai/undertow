@@ -35,6 +35,7 @@ local coreTimer = 0         -- Kernpuls-Zeit
 local coreRoomIndex = 1     -- Raumnummer für die Kernpuls-Frequenz
 local coreCompleted = false -- nach finaler Completion keine neuen Kernpulse
 local wasBlocked = false    -- Flankenerkennung Shutter-Kollision
+local bridgeSettleTimer = 0 -- Brücken-End-Klick (Pass 2, einmalig pro Ausfahren)
 local inited = false
 
 -- --- öffentliche API -------------------------------------------------------
@@ -90,13 +91,28 @@ function Audio.resetRoom(roomIndex)
     coreCompleted = false
     coreRoomIndex = roomIndex or 1
     wasBlocked = false
+    bridgeSettleTimer = 0
 end
 
 -- Zentrale zeitbasierte Audiologik (Main ruft dies einmal pro Frame): Kernpuls.
 -- Kernpuls-Timer läuft auch während der Camera-Transition weiter (Raumwechsel
 -- setzt den Timer via resetRoom neu, nicht das Camera-Ende).
 function Audio.update(dt)
-    if not inited or coreCompleted then
+    if not inited then
+        return
+    end
+    -- Brücken-End-Klick (Pass 2): einmalig nach vollständigem Ausfahren.
+    if bridgeSettleTimer > 0 then
+        bridgeSettleTimer = bridgeSettleTimer - dt
+        if bridgeSettleTimer <= 0 then
+            bridgeSettleTimer = 0
+            movementSynth:playNote(
+                config.audioBridgeSettleFreq,
+                config.audioBridgeSettleVolume,
+                config.audioBridgeSettleLen)
+        end
+    end
+    if coreCompleted then
         return
     end
     coreTimer = coreTimer + dt
@@ -144,14 +160,17 @@ end
 
 -- --- Schaltereinrasten (Teil B) --------------------------------------------
 
--- Kurze Rechteckwelle, zwei kurze absteigende Töne (Ton 2 exakt einen Halbton
--- tiefer). Nur bei echtem Switch-Zustandswechsel (Main prüft switchChanges>0;
--- kein Sound bei gleichem Zustand, kein DockAssist-/Undo-Sound).
-function Audio.playSwitchSnap()
+-- Kurze Rechteckwelle, zwei kurze absteigende Töne. Nur bei echtem Switch-
+-- Zustandswechsel (Main prüft switchChanges>0). isA (Pass 2): CW-Durchquerung
+-- schaltet auf A (Ton minimal höher), CCW auf B (Ton exakt 1 Halbton tiefer) —
+-- man hört dadurch zusätzlich die Richtung. Kein Argument = A (Rückwärtskompat.).
+function Audio.playSwitchSnap(isA)
     if not inited then return end
+    local n1 = (isA == false) and config.audioSwitchBNote1 or config.audioSwitchNote1
+    local n2 = (isA == false) and config.audioSwitchBNote2 or config.audioSwitchNote2
     local t0 = snd.getCurrentTime()
-    switchSynth:playMIDINote(config.audioSwitchNote1, config.audioSwitchVolume, config.audioSwitchLen)
-    switchSynth:playMIDINote(config.audioSwitchNote2, config.audioSwitchVolume, config.audioSwitchLen, t0 + config.audioSwitchGap)
+    switchSynth:playMIDINote(n1, config.audioSwitchVolume, config.audioSwitchLen)
+    switchSynth:playMIDINote(n2, config.audioSwitchVolume, config.audioSwitchLen, t0 + config.audioSwitchGap)
 end
 
 -- --- Brücke ausfahren (Teil C) ---------------------------------------------
@@ -167,6 +186,10 @@ function Audio.playBridgeExtend()
     bridgeGlide:addEvent(0, 0, true)
     bridgeGlide:addEvent(config.audioBridgeDuration, config.audioBridgeEndFreq - config.audioBridgeStartFreq, true)
     bridgeSynth:playNote(config.audioBridgeStartFreq, config.audioBridgeVolume, config.audioBridgeDuration)
+    -- Pass 2: sehr kleines End-Klick, sobald die Brücke voll ausgefahren ist
+    -- (synchron zur visuellen Settle-Phase). Einmal pro Ausfahren; kein zweiter
+    -- lauter Sound, kein Neu-Start in jedem Frame.
+    bridgeSettleTimer = config.bridgeExtendStage1 + config.bridgeExtendStage2 + config.bridgeExtendStage3
 end
 
 -- --- Aufprall an Blende (Teil D) -------------------------------------------
@@ -191,6 +214,31 @@ function Audio.noteShutterBlocked(blocked)
     end
 end
 
+-- --- Blenden-Körperton (Pass 2) -------------------------------------------
+
+-- Beim tatsächlichen Öffnen/Schließen einer Blende (Room.movePlayer liefert
+-- shutterTransitions). Schließen = tiefer/härter, Öffnen = etwas höher und
+-- leiser. Einmal pro Übergang; kein Frame-Sound, kein zweiter Ton beim Settle.
+-- Wiederverwendet impactSynth (kein neues Synth-Objekt).
+function Audio.noteShutterTransitions(transitions)
+    if not inited or not transitions then
+        return
+    end
+    for _, t in ipairs(transitions) do
+        if t.opened then
+            impactSynth:playNote(
+                config.audioShutterOpenFreq,
+                config.audioShutterOpenVolume,
+                config.audioShutterOpenDuration)
+        else
+            impactSynth:playNote(
+                config.audioShutterCloseFreq,
+                config.audioShutterCloseVolume,
+                config.audioShutterCloseDuration)
+        end
+    end
+end
+
 -- --- Torübergang (Teil E) --------------------------------------------------
 
 -- Langer, tiefer Puls. Nur bei erfolgreichem Gate (Main prüft das Connection-
@@ -202,6 +250,22 @@ function Audio.playGateTransition()
         config.audioGateFreq,
         config.audioGateVolume,
         config.audioGateDuration)
+end
+
+-- --- Raum-Lösungs-Impuls (Atmosphäre) --------------------------------------
+
+-- Kurzer tiefer Systemimpuls, sobald ein Raum (1-5) gelöst ist; beim finalen
+-- Gate (Raum 6) ebenfalls. Wiederverwendet impactSynth (kein neuer Synth).
+-- roomIndex (Pass 2): pro Raum minimal tiefer (resonanter), keine große Linie.
+function Audio.playRoomCompletion(roomIndex)
+    if not inited then return end
+    local idx = roomIndex or 1
+    local freq = config.audioCompletionFreq
+        * (2 ^ (((idx - 1) * config.audioCompletionSemitoneStep) / 12))
+    impactSynth:playNote(
+        freq,
+        config.audioCompletionVolume,
+        config.audioCompletionDuration)
 end
 
 -- --- Kernpuls (Teil F) -----------------------------------------------------

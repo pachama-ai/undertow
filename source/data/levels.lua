@@ -87,8 +87,8 @@ Levels = {
         start = { ring = "outer", angle = 0 },
 
         switches = {
-            { id="S1", ring="outer", angle=45,  symbol=1, onA="T",  onB="D1", state="B" },
-            { id="S2", ring="inner", angle=135, symbol=2, onA="D2", onB="B2", state="B" },
+            { id="S1", ring="outer", angle=45,  symbol=1, onA="T",  onB="B2", state="B" },
+            { id="S2", ring="inner", angle=135, symbol=2, onA="D1", onB="D2", state="B" },
         },
 
         shutters = {

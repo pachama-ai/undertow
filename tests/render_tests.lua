@@ -210,18 +210,23 @@ do
     check(Render.coreRadius(1) < Render.coreRadius(2) and Render.coreRadius(2) < Render.coreRadius(3), "kern: R1<R2<R3")
 end
 
--- --- Phase 8.2: Kernpulsation ----------------------------------------------
+-- --- Phase 8.2: Kernpulsation (Atmosphäre: zweiwelliges organisches Atmen) --
 do
     Render.visualTime = 0
     check(approx(Render.corePulseOffset(), 0), "puls: t=0 Offset 0")
+    -- Hauptwelle bei t=T/4 (Phase pi/2) plus zweite Atemwelle am selben Punkt.
     Render.visualTime = Config.corePulsePeriod / 4
-    check(approx(Render.corePulseOffset(), Config.corePulseAmplitude), "puls: t=T/4 Amplitude")
-    Render.visualTime = Config.corePulsePeriod / 2
-    check(approx(Render.corePulseOffset(), 0, 1e-3), "puls: t=T/2 Offset ~0 (sin pi)")
-    Render.visualTime = Config.corePulsePeriod
-    check(approx(Render.corePulseOffset(), 0, 1e-3), "puls: t=T Offset ~0 (sin 2pi)")
+    local expected = Config.corePulseAmplitude
+        + Config.corePulseAmplitude2 * math.sin((Config.corePulsePeriod / 4) * 2 * math.pi / Config.corePulsePeriod2)
+    check(approx(Render.corePulseOffset(), expected, 1e-3), "puls: t=T/4 zweiwellig exakt")
+    -- Determinismus: gleiche Zeit -> gleicher Wert (reine Funktion von visualTime).
+    local a1 = Render.corePulseOffset()
+    local a2 = Render.corePulseOffset()
+    check(a1 == a2, "puls: deterministisch")
+    -- Amplitude durch Summe beider Wellen begrenzt.
     Render.visualTime = Config.corePulsePeriod / 4 + 100
-    check(math.abs(Render.corePulseOffset()) <= Config.corePulseAmplitude, "puls: Amplitude begrenzt")
+    check(math.abs(Render.corePulseOffset()) <= Config.corePulseAmplitude + Config.corePulseAmplitude2,
+        "puls: Amplitude begrenzt (Haupt + Atemwelle)")
 end
 
 -- --- Phase 8.2: Symbole ----------------------------------------------------
@@ -793,6 +798,119 @@ do
     for k, v in pairs(State.elementStates) do if elBefore[k] ~= v then elSame = false end end
     for k, v in pairs(elBefore) do if State.elementStates[k] ~= v then elSame = false end end
     check(elSame, "anim read-only: elementStates unverändert")
+end
+
+-- --- Atmosphere: Blenden-Überschwinger (Trigger, Dauer, No-op) -------------
+do
+    Render.resetObjectAnims()
+    setup(makeRenderRoom()) -- S1=A -> D1 geschlossen (Spieler @0 außerhalb)
+    -- Erster Frame nach Reset: Zustand wird nur gemerkt, kein Schein-Anim.
+    Render.update(0.02)
+    check(Render.shutterAnims["D1"] == nil, "blenden-anim: kein Anim ohne Zustandswechsel")
+    -- closed -> open startet die Einfahr-Animation.
+    State.setSwitch("S1", "B")
+    Room.syncPhysicalShutters()
+    Render.update(0.02)
+    check(Render.shutterAnims["D1"] ~= nil and Render.shutterAnims["D1"].kind == "open",
+        "blenden-anim: closed->open startet open-Anim")
+    for i = 1, 8 do Render.update(0.02) end
+    check(Render.shutterAnims["D1"] == nil, "blenden-anim: open-Anim läuft aus")
+    -- open -> closed startet den Überschwinger (max. overshootFrames + 1).
+    State.setSwitch("S1", "A")
+    Room.syncPhysicalShutters()
+    Render.update(0.02)
+    check(Render.shutterAnims["D1"] ~= nil and Render.shutterAnims["D1"].kind == "close"
+        and Render.shutterAnims["D1"].frames <= Config.shutterOvershootFrames + 1,
+        "blenden-anim: open->closed startet close-Anim (begrenzte Dauer)")
+    for i = 1, 8 do Render.update(0.02) end
+    check(Render.shutterAnims["D1"] == nil, "blenden-anim: close-Anim läuft aus")
+end
+
+-- --- Atmosphere: Brücken-Stufen-Ausfahren (Trigger, Fortschritt, Settle) ---
+do
+    Render.resetObjectAnims()
+    setup(makeRenderRoom()) -- S1=A -> B1 aktiv; B0/T frei aktiv
+    -- Erster Frame: keine Schein-Anims für bereits aktive Brücken.
+    Render.update(0.02)
+    check(Render.bridgeAnims["B1"] == nil and Render.bridgeAnims["B0"] == nil,
+        "brücken-anim: kein Anim ohne false->true-Wechsel")
+    -- active -> inactive erzeugt kein Anim.
+    State.setSwitch("S1", "B")
+    Render.update(0.02)
+    check(Render.bridgeAnims["B1"] == nil, "brücken-anim: aktiv->inaktiv kein Anim")
+    -- inactive -> active startet das Ausfahren mit kleinem Anfangsforschritt.
+    State.setSwitch("S1", "A")
+    Render.update(0.02)
+    check(Render.bridgeAnims["B1"] ~= nil and Render.bridgeAnims["B1"].p <= 0.45,
+        "brücken-anim: false->true startet Ausfahren")
+    -- Nach Ausfahr- + Settle-Dauer ist die Animation abgeräumt.
+    local bTotal = Config.bridgeExtendStage1 + Config.bridgeExtendStage2 + Config.bridgeExtendStage3
+    for i = 1, math.ceil((bTotal + 0.1) / 0.02) do Render.update(0.02) end
+    check(Render.bridgeAnims["B1"] == nil, "brücken-anim: Ausfahren + Settle ausgelaufen")
+end
+
+-- --- Atmosphere: finaler Raum-6-Moment (Ghost-Drift-Freeze, Impuls, Reset) -
+do
+    Render.resetObjectAnims()
+    setup(makeRenderRoom())
+    check(Render.finalMomentActive == false, "final: anfangs inaktiv")
+    Render.beginFinalMoment()
+    check(Render.finalMomentActive == true, "final: beginFinalMoment aktiviert")
+    check(Render.finalMomentDriftTime ~= nil, "final: Drift-Zeitbasis eingefroren")
+    check(Render.completionPulseT == 0, "final: zeigt Systemimpuls")
+    -- Drift deterministisch eingefroren: gleiche Marke zu späteren Zeiten.
+    local markA = math.fmod(Render.finalMomentDriftTime * Config.ghostDriftSpeeds[1] * Config.ghostDriftDirections[1], 360)
+    Render.visualTime = Render.visualTime + 1.0
+    local markB = math.fmod(Render.finalMomentDriftTime * Config.ghostDriftSpeeds[1] * Config.ghostDriftDirections[1], 360)
+    check(markA == markB, "final: Ghost-Drift eingefroren (statische Marke)")
+    Render.endFinalMoment()
+    check(Render.finalMomentActive == false and Render.finalMomentDriftTime == nil, "final: endFinalMoment räumt auf")
+    -- Raumstart-Reset: kein hängender Final-Zustand.
+    Render.beginFinalMoment()
+    Render.resetObjectAnims()
+    check(Render.finalMomentActive == false, "final: resetObjectAnims räumt Final-Zustand")
+end
+
+-- --- Atmosphere: Raumabschluss-Systemimpuls (genau einmal) -----------------
+do
+    Render.resetObjectAnims()
+    setup(makeRenderRoom())
+    check(Render.completionPulseT == nil, "impuls: anfangs inaktiv")
+    Render.noteRoomComplete()
+    check(Render.completionPulseT == 0, "impuls: noteRoomComplete setzt Timer")
+    Render.update(0.02)
+    check(Render.completionPulseT ~= nil and Render.completionPulseT > 0, "impuls: läuft")
+    local pulseFrames = math.ceil(Config.completionPulseDuration / 0.02) + 2
+    for i = 1, pulseFrames do Render.update(0.02) end
+    check(Render.completionPulseT == nil, "impuls: läuft exakt einmal aus (kein Selbst-Nachlauf)")
+    -- Erneut auslösbar (nächster Raum): wieder Timer, wieder beendet.
+    Render.noteRoomComplete()
+    check(Render.completionPulseT == 0, "impuls: erneut startbar")
+    for i = 1, pulseFrames do Render.update(0.02) end
+    check(Render.completionPulseT == nil, "impuls: zweiter Lauf beendet")
+end
+
+-- --- Atmosphere: Idle-Core-Blick (Pupille wandert Richtung Kern) -----------
+do
+    setup(makeRenderRoom())
+    State.player.ring = "outer"
+    State.player.angle = 0 -- 12 Uhr: Kern liegt direkt unterhalb (+y)
+    Render.resetPlayerVisual()
+    Render.notePlayerMovement(5) -- facing CW, idleTime 0
+    local g0x, g0y = Render.playerEyePosition()
+    -- Nach Überschreiten der Verzögerung wandert die Pupille radial zum Kern
+    -- (bei 0° also nach unten, +y); die tangentiale Achse bleibt unberührt.
+    Render.playerVisual.idleTime = Config.idleGazeDelay + 1.5
+    local g1x, g1y = Render.playerEyePosition()
+    check(g1x == g0x and g1y > g0y, "idle-gaze: nach Verzögerung radial Richtung Kern")
+    -- Vor der Verzögerung: keine Wanderung.
+    Render.playerVisual.idleTime = Config.idleGazeDelay - 0.5
+    local g2x, g2y = Render.playerEyePosition()
+    check(g2x == g0x and g2y == g0y, "idle-gaze: vor Verzögerung keine Wanderung")
+    -- Determinismus: gleicher Zustand -> gleiche Position.
+    Render.playerVisual.idleTime = Config.idleGazeDelay + 1.5
+    local g3x, g3y = Render.playerEyePosition()
+    check(g3x == g1x and g3y == g1y, "idle-gaze: deterministisch")
 end
 
 Render.blinkRandom = savedBlinkRandom
