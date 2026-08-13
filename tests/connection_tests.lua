@@ -295,18 +295,38 @@ end
 
 -- --- Test 4: exakt auf dockRange -----------------------------------------
 do
-    setup(makeBridgeRoom(90, "outer", 84))
+    setup(makeBridgeRoom(90, "outer", 78)) -- Differenz 12 -> exakt dockRange (12)
     local result = Room.tryUseConnection()
-    check(result.used == true, "grenze inklusiv: 84 bei Range 6 nutzbar")
+    check(result.used == true, "grenze inklusiv: 78 bei Range 12 nutzbar")
 end
 
 -- --- Test 5: minimal außerhalb -------------------------------------------
 do
-    setup(makeBridgeRoom(90, "outer", 83.999))
+    setup(makeBridgeRoom(90, "outer", 77.999)) -- Differenz 12.001 > dockRange (12)
     local result = Room.tryUseConnection()
-    check(result.used == false, "grenze exklusiv: 83.999 nicht nutzbar")
+    check(result.used == false, "grenze exklusiv: 77.999 nicht nutzbar")
     check(State.player.ring == "outer", "grenze exklusiv: Ring unverändert")
-    check(approx(State.player.angle, 83.999), "grenze exklusiv: Winkel unverändert")
+    check(approx(State.player.angle, 77.999), "grenze exklusiv: Winkel unverändert")
+end
+
+-- --- Test 5b: Slightly before / after / outside (Bridge-Handling) ---------
+do
+    setup(makeBridgeRoom(90, "outer", 82)) -- 8° vor dem Dock
+    local r1 = Room.tryUseConnection()
+    check(r1.used == true, "leicht vorher: 8° vor der Brücke nutzbar")
+    completeTransit()
+    check(State.player.ring == "inner", "leicht vorher: Transit abgeschlossen")
+
+    setup(makeBridgeRoom(90, "outer", 97)) -- 7° hinter dem Dock
+    local r2 = Room.tryUseConnection()
+    check(r2.used == true, "leicht nachher: 7° hinter der Brücke nutzbar")
+    completeTransit()
+    check(State.player.ring == "inner", "leicht nachher: Transit abgeschlossen")
+
+    setup(makeBridgeRoom(90, "outer", 76)) -- 14° außerhalb der Dockzone
+    local r3 = Room.tryUseConnection()
+    check(r3.used == false, "außerhalb: 14° weg -> kein Bridge-Transit")
+    check(State.player.ring == "outer", "außerhalb: Ring unverändert")
 end
 
 -- --- Test 6: Wraparound bei 0° -------------------------------------------
@@ -377,14 +397,14 @@ end
 -- --- Test 12: Gate-Dockgrenze --------------------------------------------
 do
     setup(makeGateRoom())
-    State.player.angle = 354 -- Differenz 6 -> exakt dockRange
+    State.player.angle = 348 -- Differenz 12 -> exakt dockRange
     local r1 = Room.tryUseConnection()
-    check(r1.used == true, "gate grenze inklusiv: 354 nutzbar")
+    check(r1.used == true, "gate grenze inklusiv: 348 nutzbar")
 
     setup(makeGateRoom())
-    State.player.angle = 353.999 -- minimal außerhalb
+    State.player.angle = 347.999 -- minimal außerhalb (12.001)
     local r2 = Room.tryUseConnection()
-    check(r2.used == false, "gate grenze exklusiv: 353.999 nicht nutzbar")
+    check(r2.used == false, "gate grenze exklusiv: 347.999 nicht nutzbar")
 end
 
 -- --- Test 13: Brücke verändert keine Schalter-/Elementzustände -----------

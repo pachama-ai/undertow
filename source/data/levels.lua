@@ -42,11 +42,11 @@ Levels = {
         rings = { outer = 6, inner = 5 },
         start = { ring = "outer", angle = 0 },
 
-        -- Baby-Einführung (Tutorial): keine Schalter, keine Blenden.
-        -- B0 ist dauerhaft aktiv; das Baby wird zum Ziel geschoben.
+        -- Baby-Einführung (Tutorial): keine Schalter, keine Blenden. B0 ist
+        -- dauerhaft aktiv. Kein Ablageziel mehr: das Baby ist Begleiter und
+        -- muss gemeinsam mit dem Spieler durch das freie Gate T reisen.
         baby = {
             start = { ring = "outer", angle = 60 },
-            goal  = { ring = "inner", angle = 300 },
         },
 
         switches = {},
@@ -57,7 +57,7 @@ Levels = {
             { id="B0", angle=180, free=true },
         },
 
-        gate = { id="T", angle=0, free=false, babyLocked=true },
+        gate = { id="T", angle=0, free=true },
     },
 
     -------------------------------------------------------------------- 3
@@ -201,11 +201,11 @@ function Levels.validate()
         local controlCount = {}      -- id -> Anzahl der Steuerreferenzen (onA + onB)
         local switchIds = {}
 
-        local function registerElement(id, kind, free, babyLocked)
+        local function registerElement(id, kind, free)
             if elements[id] then
                 report(roomIndex, roomName, id, "Element-ID doppelt vergeben")
             end
-            elements[id] = { kind = kind, free = free, babyLocked = babyLocked }
+            elements[id] = { kind = kind, free = free }
         end
 
         for _, s in ipairs(room.shutters or {}) do
@@ -228,31 +228,25 @@ function Levels.validate()
             if room.gate.id == nil or room.gate.angle == nil or room.gate.free == nil then
                 report(roomIndex, roomName, "gate", "Tor unvollständig (id/angle/free)")
             else
-                registerElement(room.gate.id, "gate", room.gate.free, room.gate.babyLocked)
+                registerElement(room.gate.id, "gate", room.gate.free)
             end
         else
             report(roomIndex, roomName, nil, "Raum hat kein gate")
         end
 
-        -- Baby (generisch, Raum 2): optional. Wenn vorhanden müssen start und
-        -- goal gültige Ringe und Winkel haben. Räume ohne Baby bleiben valide.
+        -- Baby (generisch, Begleiter): optional. Wenn vorhanden muss start
+        -- einen gültigen Ring und Winkel haben. Räume ohne Baby bleiben
+        -- valide. Es gibt KEIN Ablageziel (baby.goal) mehr.
         if room.baby ~= nil then
             local bStart = room.baby.start
-            local bGoal = room.baby.goal
-            if type(bStart) ~= "table" or type(bGoal) ~= "table" then
-                report(roomIndex, roomName, "baby", "Baby ohne start/goal-Tabelle")
+            if type(bStart) ~= "table" then
+                report(roomIndex, roomName, "baby", "Baby ohne start-Tabelle")
             else
                 if bStart.ring ~= "outer" and bStart.ring ~= "inner" then
                     report(roomIndex, roomName, "baby", 'baby.start.ring ist nicht "outer"/"inner"')
                 end
                 if type(bStart.angle) ~= "number" then
                     report(roomIndex, roomName, "baby", "baby.start.angle ist keine Zahl")
-                end
-                if bGoal.ring ~= "outer" and bGoal.ring ~= "inner" then
-                    report(roomIndex, roomName, "baby", 'baby.goal.ring ist nicht "outer"/"inner"')
-                end
-                if type(bGoal.angle) ~= "number" then
-                    report(roomIndex, roomName, "baby", "baby.goal.angle ist keine Zahl")
                 end
             end
         end
@@ -322,16 +316,6 @@ function Levels.validate()
                 if el.free == true then
                     if controlled ~= 0 then
                         report(roomIndex, roomName, id, "Freies Tor wird von einem Schalter gesteuert")
-                    end
-                elseif el.babyLocked == true then
-                    -- Baby-gesperrtes Tor: wird NICHT von einem Schalter, sondern
-                    -- von der Baby-Ziel-Bedingung gesteuert. Darf keinem Schalter
-                    -- zugeordnet sein und braucht eine baby-Definition im Raum.
-                    if controlled ~= 0 then
-                        report(roomIndex, roomName, id, "Baby-gesperrtes Tor wird von einem Schalter gesteuert")
-                    end
-                    if not room.baby then
-                        report(roomIndex, roomName, id, "Baby-gesperrtes Tor ohne baby-Definition")
                     end
                 elseif controlled ~= 1 then
                     report(roomIndex, roomName, id, "Nicht-freies Tor wird nicht genau von einem Schalter gesteuert")

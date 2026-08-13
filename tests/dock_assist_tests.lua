@@ -186,21 +186,21 @@ do
     check(Room.isDockAssisting() == false, "-3: danach inaktiv")
 end
 
--- --- Pflicht-Test 3: exakt 4° --------------------------------------------
+-- --- Pflicht-Test 3: exakt im Assist-Bereich -----------------------------
 do
-    setup(makeBridgeRoom(90, 86))
+    setup(makeBridgeRoom(90, 80)) -- Differenz 10 = dockAssistRange
     Room.updateDockAssist()
-    check(Room.isDockAssisting() == true, "exakt 4°: Assistenz startet")
+    check(Room.isDockAssisting() == true, "assist 10°: Assistenz startet")
     local da = Room.getDockAssist()
-    check(da ~= nil and approx(da.signedDelta, 4), "exakt 4°: signedDelta +4")
+    check(da ~= nil and approx(da.signedDelta, 10), "assist 10°: signedDelta +10")
 end
 
--- --- Pflicht-Test 4: außerhalb (>4°) -------------------------------------
+-- --- Pflicht-Test 4: außerhalb (>8°) -------------------------------------
 do
-    setup(makeBridgeRoom(90, 85.999))
+    setup(makeBridgeRoom(90, 79.999)) -- Differenz 10.001 > dockAssistRange
     Room.updateDockAssist()
-    check(Room.isDockAssisting() == false, ">4°: keine Assistenz")
-    check(approx(State.player.angle, 85.999), ">4°: Position unverändert")
+    check(Room.isDockAssisting() == false, ">10°: keine Assistenz")
+    check(approx(State.player.angle, 79.999), ">10°: Position unverändert")
 end
 
 -- --- Pflicht-Test 5: Wraparound ------------------------------------------
@@ -447,6 +447,32 @@ do
     local r = Room.tryUseConnection()
     check(r.used == true and r.kind == "gate", "gate-int: Gate über dockRange nutzbar")
     check(r.roomComplete == true, "gate-int: roomComplete true")
+end
+
+-- --- Shared-Transfer bereit: Assistenz greift NICHT (keine Verschmelzung) --
+do
+    -- Raum mit Baby am Dock, Player dahinter: Baby.canTransfer -> shared bereit.
+    local room = {
+        name = "AssistShared",
+        rings = { outer = 7, inner = 6 },
+        start = { ring = "outer", angle = 176 },
+        switches = {},
+        shutters = {},
+        bridges = { { id="B0", angle=180, free=true } },
+        gate = { id="T", angle=0, free=true },
+        baby = { start = { ring = "outer", angle = 184 } },
+    }
+    setup(room)
+    State.player.angle = 174
+    State.baby.angle = 184
+    check(Baby.canTransfer(room.bridges[1], "outer", 174) == true,
+        "shared-assist: Shared-Transfer bereit (Vorbereitung)")
+    Room.updateDockAssist()
+    check(Room.isDockAssisting() == false, "shared-assist: keine Assistenz auf shared-bereite Brücke")
+    check(State.player.angle == 174, "shared-assist: Player bleibt hinter dem Baby (kein Snap)")
+    -- Abstand Player-Baby bleibt >= Kontaktabstand (keine Silhouetten-Verschmelzung).
+    local gap = math.abs(Geometry.delta(State.baby.angle, State.player.angle))
+    check(gap >= Baby.contactDeg(), "shared-assist: kein Overlap (Abstand >= Kontaktradius)")
 end
 
 TestReport.dockAssist = { pass = pass, fail = fail }

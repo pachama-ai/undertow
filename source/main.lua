@@ -28,7 +28,6 @@ import "core/undo"
 import "core/audio"
 import "core/save"
 import "core/sysmenu"
-import "core/bgesture"
 -- World-Abhängigkeiten: switch/bridge/gate VOR room (Room nutzt sie zur
 -- Laufzeit; switch muss für die Schalterregeln geladen sein).
 import "world/switch"
@@ -52,7 +51,6 @@ local undo <const> = Undo
 local audio <const> = Audio
 local save <const> = Save
 local sysmenu <const> = Sysmenu
-local bgesture <const> = BGesture
 local player <const> = Player
 local baby <const> = Baby
 local room <const> = Room
@@ -99,6 +97,21 @@ local pendingSystemAction = nil
 -- künstliche Begrenzung mehr (ARCHITECTURE: 6 Rätselräume / 7 Ringe).
 local maxPlayableRoom <const> = #levels
 
+-- Gemeinsamer Raumausgang (Baby-Regel): Index des ersten Raums mit einer
+-- baby-Definition (datengetrieben, keine Raum-2-Hardcode). Ab diesem Raum
+-- wird das Baby mitgeführt und der finale Ausgang verlangt das Baby.
+local babyIntroducedAt = 0
+for i = 1, #levels do
+    if levels[i].baby then
+        babyIntroducedAt = i
+        break
+    end
+end
+-- Session-Begleiter-Flag: true, sobald das Baby in einem Raum war; es wird ab
+-- dann in jeden Folge-Raum mitgenommen (State.init erzeugt den Begleiter-Start).
+-- „Von vorn" setzt es zurück; „Weiter" hinter dem Einführungsraum behält es.
+local babyCarried = false
+
 -- Session-Fortschritt (Phase 10.2): höchste in dieser Session erreichte
 -- Raumnummer. Wird beim App-Start aus dem Datastore geladen (Save.load) und
 -- steigt monoton; "Weiter" startet genau diesen Raum.
@@ -128,33 +141,12 @@ local function saveHighestRoom(roomIndex)
     end
 end
 
--- --- B-Geste (Phase 10.4) ----------------------------------------------------
--- Controller/UI-Interaktionszustand (Punkt 10): KEIN Gameplay-State. Die
--- Zustandsmaschine liegt in core/bgesture.lua (reine, testbare Logik); hier
--- wird sie mit echten Playdate-Eingaben getrieben und ihr Fortschritt an den
--- Hold-Ring (Render) gemeldet. Semantik: kurz = Undo auf Release, 0,6 s =
--- Restart (genau einmal, gewinnt im Schwellenframe; Punkte 5/12/13).
-
--- Setzt die Geste vollständig zurück (Raumstart/-wechsel, Restart, Zum Menü,
--- Systemmenü-Restart; Punkte 55-60). Verhindert stale Releases nach Restart/
--- Raumwechsel (Punkt 60): ein späteres B-Release löst dann kein Undo aus.
-local function resetBGesture()
-    bgesture.reset()
-    render.setRestartHoldProgress(0)
-end
-
--- Fortschreibt die Geste um einen Frame. Rückgabe:
---   "undo" | "restart" | nil. Rein Controller-Entscheidung; der Restart wird
---   NICHT hier ausgeführt, sondern von updateRoom über restartRoom (Punkt 16).
-local function updateBGesture()
-    local action = bgesture.update(
-        playdate.buttonJustPressed(playdate.kButtonB),
-        playdate.buttonIsPressed(playdate.kButtonB),
-        playdate.buttonJustReleased(playdate.kButtonB),
-        FRAME_DT)
-    render.setRestartHoldProgress(bgesture.getProgress())
-    return action
-end
+-- B-Eingabe (B-Taste Rework): B verarbeitet ausschließlich die Press-Edge
+-- (buttonJustPressed) als Undo — genau ein Undo pro physischem B-Drücken, kein
+-- B-Hold-Restart mehr. Die Undo-Ausführung liegt in updateRoom (nach allen
+-- Input-Locks). Es gibt keinen Hold-Timer, keinen Fortschrittsring und keine
+-- B-Gesten-Zustandsmaschine mehr (core/bgesture.lua entfernt); Raumneustart
+-- ist ausschließlich über das Playdate-Systemmenü erreichbar.
 
 -- Initialisiert einen Raum: State.init -> Undo.clear -> Room.init.
 local function startRoom(index)
@@ -167,33 +159,40 @@ local function startRoom(index)
     bridge.resetTransit()
     baby.resetTransit()
     room.resetDockAssist()
-    state.init(roomData)
+    -- Baby-Begleiter (Raum-Regel): expliziter Carry-Parameter — das Baby wird
+    -- in Folge-Räume mitgenommen (State erzeugt dann den Begleiter-Start), und
+    -- sobald ein Raum eine eigene baby-Definition hat, gilt es als eingeführt.
+    state.init(roomData, babyCarried)
+    if roomData.baby then
+        babyCarried = true
+    end
     undo.clear()
     room.init()
     roomComplete = false
     currentRoomIndex = index
+    -- Finaler Raum-6-Stillstand beenden: Ein Systemmenü-Restart mitten im
+    -- finalen Moment darf kein Outro mehr nachziehen („temporäre Visualstates"
+    -- zurücksetzen, B-Taste-Rework Teil 4).
+    finalHoldFrames = nil
+    render.endFinalMoment()
     -- Spieler-/Augenanimation auf Neutral (kein Squint/Widen/Blink-Rest,
     -- Facing-Standard CW, Idle-Timer neu). Rein visuell.
     render.resetPlayerVisual()
     -- Audio: Bewegungsrest/Kernpuls-Timer/Raumton neu; laufende SFX (z. B.
     -- Torübergang) klingen weiter aus.
     audio.resetRoom(index)
-    -- B-Geste vollständig zurücksetzen (Raumstart/-wechsel, Restart, Von vorn/
-    -- Weiter; Punkte 55/56/58): kein alter Hold-State, kein stale Release.
-    resetBGesture()
 end
 
 -- Startet das Outro nach dem finalen Gate (Raum 6). Nur Präsentation: wechselt
 -- in den Outro-Modus, startet die Transition mit der sichtbaren Room-6-Geometrie
 -- und entfernt die Gameplay-Systemmenüeinträge (Punkt 16: kein „Raum neu
--- starten"/„Zum Menü" im Outro). B-Geste wird vollständig zurückgesetzt
--- (kein stale Hold/Release im Outro, Punkt 18). sysmenu.removeAll() direkt
--- (Äquivalent zu removeGameplaySystemMenu, das erst später deklariert ist).
+-- starten"/„Zum Menü" im Outro). sysmenu.removeAll() direkt (Äquivalent zu
+-- removeGameplaySystemMenu, das erst später deklariert ist). B ist im Outro
+-- gesperrt (updateScene ruft updateRoom dort nicht auf).
 local function startOutro()
     transition.startOutro(currentRoomIndex, state.room.rings.outer, state.room.rings.inner)
     appMode = "outro"
     sysmenu.removeAll()
-    resetBGesture()
 end
 
 -- Zentrale Progressionsentscheidung nach einer Verbindungs-Aktion (A).
@@ -233,6 +232,10 @@ local function handleConnectionResult(result)
             -- wird pro gelöstem Raum minimal tiefer/resonanter.
             render.noteRoomComplete()
             audio.playRoomCompletion(nextIndex - 1)
+            -- Raumübergang: eigener, größerer Abschlusssound beim bestätigten
+            -- GEMEINSAMEN Raumabschluss (Gate verlangt das Baby am Ausgang) —
+            -- nicht schon beim bloßen Erreichen des Gates ohne Baby.
+            audio.playRoomTransition()
         else
             -- Raum 6 finales Gate -> finaler Gameplay-Abschluss + Outro.
             -- roomComplete bleibt interner Zustand; die Gameplaypipeline läuft
@@ -287,9 +290,6 @@ local function showMainMenu()
     menu.show()
     appMode = "menu"
     removeGameplaySystemMenu()
-    -- B-Geste zurücksetzen (Zum Menü, Punkt 57): kein altes B-Release darf
-    -- beim späteren Continue plötzlich Undo auslösen.
-    resetBGesture()
 end
 
 -- „Zum Menü": laufenden Raum verlassen, Startmenü anzeigen. Der Mid-Room-State
@@ -305,6 +305,9 @@ end
 -- weiterhin Raum 1. Beide Pfade nutzen denselben zentralen startRoom.
 local function startContinueGame()
     menu.hide()
+    -- Continue hinter dem Einführungsraum: das Baby wurde mitgenommen und
+    -- startet als Begleiter (gemeinsamer Raumausgang ab dann Pflicht).
+    babyCarried = highestRoom >= babyIntroducedAt
     startRoom(highestRoom)
     camera.init(state.room.rings.outer)
     appMode = "game"
@@ -316,6 +319,9 @@ end
 -- nicht; kommt erst in 10.2).
 local function startNewGame()
     menu.hide()
+    -- Frisches Spiel: Baby ist (noch) kein Begleiter — es wird erst durch die
+    -- baby-Definition des Einführungsraums eingeführt („Von vorn" setzt zurück).
+    babyCarried = false
     startRoom(1)
     camera.init(state.room.rings.outer)
     appMode = "game"
@@ -334,15 +340,13 @@ end
 
 -- Gameplay-Update eines Raum-Frames.
 -- Verbindliche Reihenfolge:
---   0) B-Geste (kurz = Undo auf Release, 0,6 s = Restart) — Metaaktion
---      läuft auch während Bridge/Camera/Completion
---   1) B-Tap-Undo (nur bei entsperrtem Gameplay; ein Undo-Frame macht keine
---      Bewegung/A)
+--   1) B-Undo (Press-Edge; nur bei entsperrtem Gameplay — ein Undo-Frame
+--      macht keine Bewegung/A)
 --   2) Bewegung (Player -> Room.movePlayer)
 --   3) A-Aktion (nach der Bewegung, an der tatsächlich erreichten Position)
 local function updateRoom()
     -- Finaler Raum-6-Moment (Pass 2): kurzer Stillstand vor dem Outro. Alle
-    -- Eingaben gesperrt (auch B-Restart/Undo); die Welt steht (Ghost-Drift
+    -- Eingaben gesperrt (auch B/Undo); die Welt steht (Ghost-Drift
     -- eingefroren). Danach startet das Outro genau einmal.
     if finalHoldFrames ~= nil then
         finalHoldFrames = finalHoldFrames - 1
@@ -354,24 +358,11 @@ local function updateRoom()
         return
     end
 
-    -- 0) B-Geste (Phase 10.4): kurz = Undo (auf Release), 0,6 s = Restart.
-    --    Läuft in ALLEN Game-Zuständen, damit ein Hold auch während Bridge/
-    --    Camera/Completion einen Restart auslösen kann (Metaaktion wie der
-    --    Systemmenü-Restart, Punkte 21/74/75/76). Der Tap-Undo wird unten nur
-    --    bei entsperrtem Gameplay ausgeführt.
-    local bAction = updateBGesture()
-    if bAction == "restart" then
-        -- Zentrale 10.3-Wahrheit: restartRoom (startRoom + stabile Kamera).
-        -- Kein Save-Effekt; der Restart-Frame verarbeitet keine weitere Eingabe.
-        restartRoom()
-        return
-    end
-
     -- Kamera-Raumwechsel: während der 1,2-s-Transition ist die gesamte
-    -- Gameplay-Eingabe gesperrt (Kurbel, D-Pad, A, B-Tap-Undo, DockAssist).
+    -- Gameplay-Eingabe gesperrt (Kurbel, D-Pad, A, B/Undo, DockAssist).
     -- Nur die Kamera wird weitergeschaltet; Rendering und Timer laufen weiter
-    -- (drawScene/updateTimers sind unabhängig von updateRoom). Ein B-Hold
-    -- wurde oben bereits als Restart behandelt.
+    -- (drawScene/updateTimers sind unabhängig von updateRoom). B löst während
+    -- des Locks nichts aus (B-Taste-Rework Teil 12).
     if camera.isTransitioning() then
         camera.update(FRAME_DT)
         render.noteShutterBlocked(false)
@@ -380,8 +371,7 @@ local function updateRoom()
     end
 
     if roomComplete then
-        -- Nach Raumabschluss: Bewegung, A und B-Tap bleiben gesperrt
-        -- (B-Hold-Restart oben schon behandelt).
+        -- Nach Raumabschluss: Bewegung, A und B bleiben gesperrt.
         return
     end
 
@@ -392,16 +382,24 @@ local function updateRoom()
     -- löst beim Abschluss einen Landing-Impuls aus (rein visuell).
     if bridge.isCrossing() then
         room.resetDockAssist()
-        local completed, wasShared = bridge.update(FRAME_DT)
+        local completed, wasShared, babyLanded = bridge.update(FRAME_DT)
         if completed then
             -- Ringwechsel: alle Traversierungen des alten Rings sind gegenstandslos
             -- (Release-Fix 1) — keine halbe Schalterdurchquerung über die Ring-
             -- grenze hinweg.
             room.resetSwitchTraversal()
             room.syncPhysicalShutters()
+            -- Gemeinsamer Player+Baby-Transit: der Player landet ruhig
+            -- (subtiler als das Baby). Rein visuell.
             if wasShared then
-                render.noteBabyLanding()
+                render.notePlayerLanding()
             end
+        end
+        -- Baby-Landing (gemeinsamer Transit): das Baby erreicht den Zielring
+        -- früher als der Player — der Settling-/Blick-zurück-Impuls startet
+        -- dann schon in DIESEM Frame (Baby landet zuerst, Player kurz danach).
+        if babyLanded then
+            render.noteBabyLanding()
         end
         render.noteShutterBlocked(false)
         audio.noteShutterBlocked(false)
@@ -423,12 +421,15 @@ local function updateRoom()
         return
     end
 
-    -- 1) B-Tap-Undo (Phase 10.4): Kurzdruck (Release vor 0,6 s). Nur hier
-    --    erreichbar, wenn KEIN Input-Lock greift (Camera/Bridge/roomComplete
-    --    sind oben bereits zurückgekehrt) — kurzer B-Tap während eines Locks
-    --    erzeugt also kein Undo (Punkt 22). Eine laufende Andockhilfe wird
-    --    dabei verworfen. Undo startet keine Reaktion; Player-Animation neutral.
-    if bAction == "undo" then
+    -- 1) B-Undo (B-Taste Rework): B verarbeitet NUR die Press-Edge
+    --    (buttonJustPressed) — genau ein Undo pro physischem B-Drücken, egal
+    --    wie lange gehalten wird (kein Restart, kein Wiederholen pro Frame,
+    --    Teile 1/11). Nur hier erreichbar, wenn KEIN Input-Lock greift
+    --    (Camera/Bridge/roomComplete sind oben bereits zurückgekehrt) — B
+    --    während eines Locks erzeugt also kein Undo (Teil 12). Eine laufende
+    --    Andockhilfe wird dabei verworfen. Undo startet keine Reaktion;
+    --    Player-Animation neutral.
+    if playdate.buttonJustPressed(playdate.kButtonB) then
         room.resetDockAssist()
         -- Traversal-State vollständig neutralisieren (Release-Fix 1): Nach einem
         -- Undo darf keine halbe Schalterdurchquerung phantomartig weiterleben
@@ -490,22 +491,26 @@ local function updateRoom()
         -- Pass 2: Blenden-Körperton beim tatsächlichen Öffnen/Schließen
         -- (Schließen tiefer/härter, Öffnen etwas höher und leiser).
         audio.noteShutterTransitions(moveResult.shutterTransitions)
-        -- Baby-Reaktionen (generisch, Raum 2, rein visuell): beim echten
-        -- Schieben leichte Kompression in Fahrtrichtung + Augenweiten (Baby)
-        -- und minimaler Druck + fokussierter Blick (Player); beim Einrasten ins
-        -- Ziel ein kurzer Settling-Impuls. Kein Gameplay-Effekt.
+        -- Baby-Reaktionen (generisch, rein visuell): beim echten Schieben
+        -- leichte Kompression in Fahrtrichtung + Augenweiten (Baby) und
+        -- minimaler Druck + fokussierter Blick (Player). Kein Gameplay-Effekt.
         if moveResult.babyMoved then
             render.noteBabyPush(actualDelta)
             render.notePlayerPushContact()
         end
-        if moveResult.babySettled then
-            render.noteBabySettled()
-        end
+        -- Baby-Sounds (Begleiter): weicher Push-Ton bei Kontaktaufnahme
+        -- (Flanke, nicht pro Frame), dumpfer Impact-Ton bei blockiertem Schub
+        -- an das Baby (Baby gegen Grenze/Shutter, Spieler drückt weiter).
+        audio.noteBabyPush(moveResult.babyMoved == true)
+        audio.noteBabyImpact(moveResult.blocked and Baby.isContactingPlayer())
     else
         room.updateDockAssist()
-        -- Kein Bewegungsversuch in diesem Frame: keine Kollision.
+        -- Kein Bewegungsversuch in diesem Frame: keine Kollision, kein
+        -- Baby-Kontakt (Flanken-Latches zurücksetzen).
         render.noteShutterBlocked(false)
         audio.noteShutterBlocked(false)
+        audio.noteBabyPush(false)
+        audio.noteBabyImpact(false)
     end
 
     -- 3) A-Aktion (Just-Pressed, damit ein gehaltenes A nicht frameweise
@@ -520,6 +525,18 @@ local function updateRoom()
         -- nicht bei reiner Brücke). Der Puls klingt über den Raumwechsel aus.
         if result.used and result.kind == "gate" then
             audio.playGateTransition()
+        end
+        -- Brückenwechsel-Sound beim tatsächlichen Transferstart (solo ODER
+        -- gemeinsam mit Baby). Nicht beim bloßen Andocken — tryUseConnection
+        -- startet den Transit erst, wenn die Brücke tatsächlich genutzt wird.
+        if result.used and result.crossing then
+            audio.playBridgeCrossing()
+        end
+        -- Baby-Schicht-Sound beim GEMEINSAMEN Transfer (Player+Baby über eine
+        -- Brücke): heller Klingelton über dem mechanischen Zip — das Baby
+        -- „geht mit“. Nur bei sharedBridge.
+        if result.used and result.kind == "sharedBridge" then
+            audio.playBabyBridgeLayer()
         end
         handleConnectionResult(result)
     end
@@ -561,13 +578,11 @@ menu.init()
 -- Systemmenu-Zugriff initialisieren (eigene Einträge leeren); die zwei
 -- Gameplay-Einträge werden erst beim Spielstart registriert.
 sysmenu.init()
--- TEMPORÄR (Test): direkt in Raum 2 starten statt Startmenü anzuzeigen.
--- Entfernen, um zum normalen Menüstart zurückzukehren.
-startRoom(2)
-camera.init(state.room.rings.outer)
-appMode = "game"
-installGameplaySystemMenu()
--- showMainMenu()
+-- Produktionsstart: Startmenü anzeigen (vorher sprang der Build per
+-- TEMPORÄR-Testblock direkt in Raum 2 — Testartefakt, im Zuge des B-Taste-
+-- Reworks entfernt). Gameplay beginnt erst nach Auswahl: „Weiter" = höchster
+-- erreichter Raum, „Von vorn" = Raum 1.
+showMainMenu()
 
 function playdate.update()
     playdate.timer.updateTimers()

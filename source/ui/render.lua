@@ -38,20 +38,6 @@ local BLACK <const> = gfx.kColorBlack
 -- --- Rein visueller UI-State (keine Gameplay-Wahrheit) ---------------------
 Render.visualTime = 0
 
--- B-Hold-Fortschritt für den Restart-Ring (Phase 10.4). 0 = kein Ring, 1 =
--- Schwelle erreicht. Wird NUR von main.lua gesetzt (Controller-Interaktion);
--- Render entscheidet NICHT, wann ein Restart passiert. Kein Gameplay-State.
-Render.restartHoldProgress = 0
-
--- Read-only Setter für den Hold-Fortschritt (geclampt 0..1). Kein Effekt auf
--- State/Undo/Room/Bridge/Camera/Audio/Save.
-function Render.setRestartHoldProgress(progress)
-    local p = progress or 0
-    if p < 0 then p = 0 end
-    if p > 1 then p = 1 end
-    Render.restartHoldProgress = p
-end
-
 -- Spieler-/Augenanimation (Phase 8.4): reiner UI-State, keine zweite
 -- Spielerposition (Ring/Winkel kommen nur aus State.player). Die
 -- Brückenstreckung wird zur Laufzeit aus Bridge.isCrossing() und
@@ -118,6 +104,7 @@ function Render.resetPlayerVisual()
         switchWidenFramesRemaining = 0,
         shutterSquintFramesRemaining = 0,
         pushFramesRemaining = 0,             -- minimaler Druck beim Baby-Push
+        landingFramesRemaining = 0,          -- ruhiges Landing nach gemeinsamem Transit
         wasBlockedLastFrame = false,         -- Flankenerkennung Shutter-Kollision
     }
     -- Press-Animation der Schalter: keine Restzähler in neue Räume tragen.
@@ -151,6 +138,8 @@ function Render.resetObjectAnims()
     Render.bridgeAnims = {}
     Render.prevShutter = {}
     Render.prevBridge = {}
+    Render.prevReady = {}
+    Render.bridgeReadyFrames = {}
     Render.completionPulseT = nil
     Render.finalMomentActive = false
     Render.finalMomentDriftTime = nil
@@ -189,6 +178,16 @@ end
 -- Schalter-Visualzustand: "A" | "B" (aus State.switchStates).
 function Render.switchVisualState(switchId)
     return state.switchStates[switchId]
+end
+
+-- Read-only Helfer (Tests/Lesbarkeit): welche tangentiale Seite des Schalters
+-- ist aktuell aktiv? CW-Seite = Zustand A, CCW-Seite = Zustand B. Rückgabe
+-- { cw = bool, ccw = bool }. Rein aus State.switchStates abgeleitet; die
+-- tatsächliche Zeichnung (aktiv = gefüllt, inaktiv = Kontur) nutzt dieselbe
+-- Zuordnung. Kein Gameplay-Effekt.
+function Render.switchSideState(switchId)
+    local isA = Render.switchVisualState(switchId) == "A"
+    return { cw = isA, ccw = not isA }
 end
 
 -- Brücken-/Gate-Visualzustand: "active" | "inactive" (aus State.elementStates).
@@ -232,6 +231,9 @@ function Render.update(dt, roomComplete)
     -- Player-Push-Kompression (Baby-Kontakt): kurzer Frame-Zähler.
     if Render.playerVisual and Render.playerVisual.pushFramesRemaining > 0 then
         Render.playerVisual.pushFramesRemaining = Render.playerVisual.pushFramesRemaining - 1
+    end
+    if Render.playerVisual and Render.playerVisual.landingFramesRemaining > 0 then
+        Render.playerVisual.landingFramesRemaining = Render.playerVisual.landingFramesRemaining - 1
     end
     -- Crank-Onboarding-Hinweis: Restzeit abbauen (räumt die Spielfläche).
     if Render.crankHintTime ~= nil and Render.crankHintTime > 0 then
@@ -339,6 +341,28 @@ function Render.updateObjectAnimations(dt)
             Render.bridgeAnims[id] = { t = 0, p = 0, state = "extending", settleFrames = 0 }
         end
         Render.prevBridge[id] = cur
+    end
+    -- Bridge-Ready-Impuls (Auftrag: Switch/Bridge Visual Polish): wird ein
+    -- aktives Bridge-Dock angedockt (Spieler in dockRange, kein laufender
+    -- Transit/Camera), startet ein kurzer Frame-Impuls (minimal kräftiger +
+    -- mechanischer Tick im Anschlussbereich). Kein permanentes Blinken, kein
+    -- Gameplay-Effekt — rein visuell.
+    for _, b in ipairs(state.room.bridges) do
+        local docked = not Bridge.isCrossing() and not Baby.isCrossing() and not Camera.isTransitioning()
+            and Render.bridgeVisualState(b.id) == "active"
+            and Bridge.isUsable(b, state.player.angle)
+        local prev = Render.prevReady[b.id]
+        if docked and prev ~= true then
+            Render.bridgeReadyFrames[b.id] = config.bridgeReadyFrames
+        end
+        Render.prevReady[b.id] = docked
+    end
+    for id, f in pairs(Render.bridgeReadyFrames) do
+        if f and f > 0 then
+            Render.bridgeReadyFrames[id] = f - 1
+        else
+            Render.bridgeReadyFrames[id] = nil
+        end
     end
     -- Blenden-Framezähler abbauen.
     for id, a in pairs(Render.shutterAnims) do
@@ -449,22 +473,25 @@ function Render.notePlayerPushContact()
     pv.pushFramesRemaining = config.babyPushFrames
 end
 
--- Baby-Ziel-Einrasten (generisch, Raum 2): kurze Kompression + Augenweiten,
--- danach ruhiger lebendiger Endzustand. Rein visuell, kein Gameplay-Effekt.
-function Render.noteBabySettled()
-    local bv = Render.babyVisual
-    if not bv then
+-- Player-Landing nach dem GEMEINSAMEN Brückentransit (Player+Baby): ruhiges,
+-- kleines Setzen (1 px radiale Kompression, nur wenige Frames) — bewusst
+-- subtiler als die Babyreaktion, damit das Baby die Szene „erzählt“. Rein
+-- visuell, kein Gameplay-Effekt.
+function Render.notePlayerLanding()
+    local pv = Render.playerVisual
+    if not pv then
         return
     end
-    bv.settleFramesRemaining = config.babySettleFrames
-    bv.blinkFramesRemaining = 0
-    bv.pushFramesRemaining = 0
-    bv.idleTime = 0
-    bv.nextBlinkAt = Render.pickBabyBlinkInterval()
+    pv.landingFramesRemaining = 3
+    pv.blinkFramesRemaining = 0
+    pv.switchWidenFramesRemaining = 0
+    pv.shutterSquintFramesRemaining = 0
+    pv.idleTime = 0
+    pv.nextBlinkAt = Render.pickBlinkInterval()
 end
 
--- Baby-Landing nach dem Brückentransit (generisch, Raum 2): kleiner
--- Settling-Impuls, damit die Ankunft auf dem anderen Ring sichtbar ist.
+-- Baby-Landing nach dem Brückentransit (generisch): kleiner Settling-Impuls,
+-- damit die Ankunft auf dem anderen Ring sichtbar ist.
 function Render.noteBabyLanding()
     local bv = Render.babyVisual
     if not bv then
@@ -605,12 +632,35 @@ function Render.sharedPlayerAngle()
     return geo.norm(bt.playerStartAngle + d * p)
 end
 
+-- Winkel der gemeinsamen Dockformation im READY-Zustand (Shared-Transfer
+-- bereit, A noch nicht gedrückt): das Baby sitzt an der Brückenachse, der
+-- Player wird direkt dahinter auf die Formation ausgerichtet — Abstand aus den
+-- Figurenradien abgeleitet, in der bisherigen Schieberichtung. Rein visuell,
+-- kein Gameplay. nil, wenn kein Transfer bereit ist.
+function Render.sharedReadyPlayerAngle()
+    local tb = Baby.findTransferReadyBridge()
+    if not tb then
+        return nil
+    end
+    local gapDeg = config.sharedFormationGapDeg
+        or (config.playerRadius + config.babyRadius + 2) / config.innerRadius * (180 / math.pi)
+    local dir = (state.baby and state.baby.lastPushDirection) or 1
+    return geo.norm(tb.angle - dir * gapDeg)
+end
+
 function Render.playerScreenPosition()
     local radius = Render.playerRadius()
     local angle = state.player.angle
     local sharedAngle = Render.sharedPlayerAngle()
     if sharedAngle then
         angle = sharedAngle
+    elseif not Bridge.isCrossing() and not Baby.isCrossing() then
+        -- Ready-Formation nur OHNE laufenden Transit: während einer Überquerung
+        -- (solo oder gemeinsam) gilt immer die reale Achs-/Babyposition.
+        local readyAngle = Render.sharedReadyPlayerAngle()
+        if readyAngle then
+            angle = readyAngle
+        end
     elseif Bridge.isCrossing() then
         angle = Bridge.getTransit().angle
     end
@@ -657,7 +707,8 @@ function Render.babyRadius()
 end
 
 -- Bildschirmposition des Babys (Mittelpunkt). nil, wenn kein Baby vorhanden.
--- Während eines gemeinsamen Transits auf der Brückenachse (Player-Follow).
+-- Während eines gemeinsamen Transits auf der Brückenachse (Player-Follow) mit
+-- sanftem Austritt in die Landeposition im letzten Wegviertel (kein Sprung).
 function Render.babyScreenPosition()
     local radius = Render.babyRadius()
     if not radius then
@@ -666,7 +717,17 @@ function Render.babyScreenPosition()
     local angle = state.baby.angle
     local bt = Bridge.getTransit()
     if bt and bt.active and bt.shared then
+        local progress = Bridge.getBabyTransitProgress() or 0
         angle = bt.angle
+        -- Sanfter Austritt (letzte 25 % des Weges): das Baby gleitet tangential
+        -- aus der Achse auf seine Zielposition (babyBridgeExitOffset) — dadurch
+        -- landet es exakt dort, wo es beim Abschluss gesetzt wird (kein Sprung).
+        if progress > 0.75 then
+            local k = (progress - 0.75) / 0.25
+            local dir = (state.baby and state.baby.lastPushDirection) or 1
+            local exitAngle = geo.norm(bt.angle + dir * config.babyBridgeExitOffset)
+            angle = geo.norm(bt.angle + geo.delta(bt.angle, exitAngle) * k)
+        end
     elseif Baby.isCrossing() then
         angle = Baby.getTransit().angle
     end
@@ -733,10 +794,14 @@ function Render.playerEyePosition()
     return px, py
 end
 
--- Baby-Augenposition: subtile Pupillenrichtung. Bridge-Ready -> radial zur
--- Brücke/anderen Ring (kein Text, die Welt erklärt die Aktion). Sonst kleine
--- Basis-Awareness Richtung Player (kein hektisches Tracking) + nach längerem
--- Stillstand stärkerer, langsamer Idle-Blick. Rein visuell, kein Gameplay.
+-- Baby-Augenposition (Player-Tracking): die Pupille zeigt GRUNDSÄTZLICH immer
+-- zum Spieler (Screen-Vektor baby->player), sobald keine höher priorisierte
+-- Animation aktiv ist (Transit/Bridge-Ready/Push/Blink). Da Screen-Vektoren
+-- verwendet werden, funktioniert das auf demselben Ring (tangential) wie über
+-- verschiedene Ringe hinweg (radial/diagonal nach innen oder außen) — kein
+-- separates links/rechts-Gating. Pupil-Travel konstant babyLookTravel (klein,
+-- ruhig, kein googly-eye). Bridge-Ready/Transit: radial zur Brücke/anderen
+-- Ring (der weltbasierte "A"-Hinweis). Kein Idle-Gating mehr. Rein visuell.
 function Render.babyEyePosition(reaction, x, y)
     if reaction == "bridge" or reaction == "transit" then
         local dx, dy = config.centerX - x, config.centerY - y
@@ -746,20 +811,14 @@ function Render.babyEyePosition(reaction, x, y)
         end
         return x, y
     end
+    -- Player-Tracking (Grundregel): immer aktiv, sobald das Baby normal steht.
     local px, py = Render.playerScreenPosition()
     local dx, dy = px - x, py - y
     local len = math.sqrt(dx * dx + dy * dy)
     if len < 0.01 then
         return x, y
     end
-    local bv = Render.babyVisual or {}
-    local idle = bv.idleTime or 0
-    local g = 0
-    if idle > config.idleGazeDelay then
-        g = math.max(0, math.sin((idle - config.idleGazeDelay) / config.idleGazeCycle * math.pi))
-    end
-    local travel = config.babyLookBase + (config.babyLookTravel - config.babyLookBase) * g
-    return x + dx / len * travel, y + dy / len * travel
+    return x + dx / len * config.babyLookTravel, y + dy / len * config.babyLookTravel
 end
 
 -- Ghost-Ringnummern (reine Berechnung): äußere World-Ringnummern der
@@ -1002,12 +1061,20 @@ end
 -- die Lücke NICHT geschlossen (beide Stummel separat hervorgehoben).
 -- transferReady: an genau dieser Brücke ist ein Baby-Transfer bereit -> kleiner
 -- pulsierender Dock-Punkt am Mittelpunkt (weltbasierter Hinweis, kein Text).
+-- Auftrag (Switch/Bridge Visual Polish): AKTIVE Brücken bekommen definierte
+-- Endkappen (kurze Tangential-Anker an beiden Ringanschlüssen) und einen
+-- kurzen Ready-Impuls nach dem Andocken; INAKTIVE Brücken zeigen eine kleine
+-- Bruch-Kerbe an den Stummelspitzen (der Spalt bleibt klar sichtbar).
 local function drawBridge(b, previewOn, transferReady)
     local outerR = Render.ringRadius("outer")
     local innerR = Render.ringRadius("inner")
     local x1, y1 = geo.polar(config.centerX, config.centerY, outerR, b.angle)
     local x2, y2 = geo.polar(config.centerX, config.centerY, innerR, b.angle)
+    local rad = math.rad(b.angle)
+    local tanx, tany = math.cos(rad), math.sin(rad) -- tangential CW
     local visual = Render.bridgeVisualState(b.id)
+    -- Ready-Impuls: wenige Frames minimal kräftiger nach dem Andocken.
+    local ready = (Render.bridgeReadyFrames and Render.bridgeReadyFrames[b.id] or 0) > 0
     if visual == "active" then
         -- Stufen-Ausfahren: die zwei Stummel wachsen 0->45% schnell, kurze
         -- Pause, 45->100% schnell und setzen 1 px nach (KLACK). Rein visuell,
@@ -1024,16 +1091,33 @@ local function drawBridge(b, previewOn, transferReady)
         local mid = (outerR + innerR) / 2
         local c1x, c1y = geo.polar(config.centerX, config.centerY, outerR - (outerR - mid) * p, b.angle)
         local c2x, c2y = geo.polar(config.centerX, config.centerY, innerR + (mid - innerR) * p, b.angle)
+        local w = config.bridgeWidth + settle + (ready and config.bridgeReadyThicken or 0)
         if previewOn then
             gfx.setColor(WHITE)
-            gfx.setLineWidth(config.bridgeWidth + 2 + settle)
+            gfx.setLineWidth(w + 2)
             gfx.drawLine(x1, y1, c1x, c1y)
             gfx.drawLine(x2, y2, c2x, c2y)
         end
         gfx.setColor(WHITE)
-        gfx.setLineWidth(config.bridgeWidth + settle)
+        gfx.setLineWidth(w)
         gfx.drawLine(x1, y1, c1x, c1y)
         gfx.drawLine(x2, y2, c2x, c2y)
+        -- Endkappen (Auftrag): kurze Tangential-Anker an beiden Ringanschlüssen,
+        -- sobald die Brücke voll ausgefahren ist (p==1). Verankert die Brücke
+        -- sichtbar in den Bahnen und hebt sie von zufälligen Balken ab.
+        if p >= 1 then
+            local capLen = config.bridgeEndCapLen
+            gfx.setLineWidth(config.bridgeEndCapWidth)
+            gfx.drawLine(x1 - tanx * capLen, y1 - tany * capLen, x1 + tanx * capLen, y1 + tany * capLen)
+            gfx.drawLine(x2 - tanx * capLen, y2 - tany * capLen, x2 + tanx * capLen, y2 + tany * capLen)
+            gfx.setLineWidth(1)
+        end
+        -- Ready-Tick (Auftrag): kleiner mechanischer Punkt am äußeren Anschluss
+        -- während der wenigen Ready-Frames (kein permanentes Blinken).
+        if ready then
+            gfx.setLineWidth(1)
+            gfx.fillCircleAtPoint(x1, y1, 1.5)
+        end
     else
         local a1x, a1y = geo.polar(config.centerX, config.centerY, outerR - config.stubLength, b.angle)
         local a2x, a2y = geo.polar(config.centerX, config.centerY, innerR + config.stubLength, b.angle)
@@ -1047,6 +1131,15 @@ local function drawBridge(b, previewOn, transferReady)
         gfx.setLineWidth(config.bridgeWidth)
         gfx.drawLine(x1, y1, a1x, a1y)
         gfx.drawLine(x2, y2, a2x, a2y)
+        -- Bruch-Kerbe (Auftrag): kurze schwarze Querlinie an jeder Stummel-
+        -- spitze — der Balken wirkt abgeschnitten/gebrochen, der Spalt bleibt
+        -- klar als unterbrochene Verbindung erkennbar.
+        local notch = config.bridgeInactiveNotch
+        gfx.setColor(BLACK)
+        gfx.setLineWidth(1)
+        gfx.drawLine(a1x - tanx * notch, a1y - tany * notch, a1x + tanx * notch, a1y + tany * notch)
+        gfx.drawLine(a2x - tanx * notch, a2y - tany * notch, a2x + tanx * notch, a2y + tany * notch)
+        gfx.setColor(WHITE)
     end
     -- Subtiler Dock-Puls (Baby-Ready): kleiner SCHWARZER Punkt am Brücken-
     -- Mittelpunkt pulsiert langsam, wenn genau an dieser Brücke ein Baby-
@@ -1111,28 +1204,63 @@ local function drawGate(previewOn)
     gfx.setLineWidth(1)
 end
 
--- Kleine Pfeilspitze (Dreieck) an Position (cx,cy) in Richtung (dirx,diry).
-local function drawArrowTip(cx, cy, dirx, diry, perpx, perpy, filled)
-    local apexX = cx + dirx * 3
-    local apexY = cy + diry * 3
-    local bx1 = cx - dirx * 1.5 + perpx * 2
-    local by1 = cy - diry * 1.5 + perpy * 2
-    local bx2 = cx - dirx * 1.5 - perpx * 2
-    local by2 = cy - diry * 1.5 - perpy * 2
-    if filled then
-        gfx.fillPolygon(apexX, apexY, bx1, by1, bx2, by2)
-    else
-        gfx.drawPolygon(apexX, apexY, bx1, by1, bx2, by2)
-    end
+-- Vorwärtsdeklaration für fillOval (wird weiter unten definiert, wird aber
+-- bereits von drawSwitch für die Kapsel-Variante B genutzt).
+local fillOval
+
+-- Kleine Pfeilspitze (Chevron): zeigt in Richtung dirAngle (Grad), Zentrum
+-- bei (cx,cy). Zwei Schenkel von der Basis (zurückversetzt, Halbbreite quer)
+-- zur Spitze. Rein 1-Bit-Linien; width = Strichstärke.
+local function drawChevronTip(cx, cy, dirAngle, len, half, width)
+    local rad = math.rad(dirAngle)
+    local tx, ty = math.cos(rad), math.sin(rad)
+    local px, py = -math.sin(rad), math.cos(rad)
+    gfx.setLineWidth(width)
+    gfx.drawLine(cx - tx * len + px * half, cy - ty * len + py * half, cx + tx * len, cy + ty * len)
+    gfx.drawLine(cx - tx * len - px * half, cy - ty * len - py * half, cx + tx * len, cy + ty * len)
+    gfx.setLineWidth(1)
 end
 
--- 8) Schalter (rein visuell, mechanisch): kleine dunkle Nocke direkt IN der
--- Ringbahn (Bahnhöhe), mit gerichteter weißer Kerbe/Spitze: Zustand A -> CW,
--- Zustand B -> CCW (Asymmetrie ohne Text lesbar). Das kleine Verknüpfungs-
--- symbol bleibt in der Nocke (optionaler Hinweis; die Form funktioniert auch
--- ohne). Bei echtem Umschalten drückt sich der Schalter config.switchPress-
--- Frames lang 1-2 px radial zur Ringmitte ein (config.switchPressOffset), nur
--- am Schalter, an dem der Spieler steht (config.switchPressProximity).
+-- Gefüllte Pfeilspitze (Dreieck): zeigt in Richtung dirAngle (Grad), Zentrum
+-- bei (cx,cy). Spitze bei +t*tipLen, Basis bei -t*tipLen mit Halbbreite half.
+-- Solide 1-Bit-Fläche (gfx.fillPolygon) — eindeutige Richtungsnase.
+local function drawArrowHead(cx, cy, dirAngle, tipLen, half, grow)
+    local rad = math.rad(dirAngle)
+    local tx, ty = math.cos(rad), math.sin(rad)
+    local px, py = -math.sin(rad), math.cos(rad)
+    local hw = half + (grow or 0)
+    gfx.fillPolygon(
+        cx + tx * tipLen, cy + ty * tipLen,
+        cx - tx * tipLen + px * hw, cy - ty * tipLen + py * hw,
+        cx - tx * tipLen - px * hw, cy - ty * tipLen - py * hw)
+end
+
+-- Inaktive Marke als dünner Konturring (Donut): weißer Kreis mit schwarzem
+-- Kern. Deterministisch hohl (drawCircleAtPoint rasterisiert sehr kleine
+-- Kreise in diesem SDK unzuverlässig) — die inaktive Richtung bleibt sichtbar,
+-- aber klar schwächer als die gefüllte aktive Marke.
+local function drawRing(x, y, rOuter)
+    if rOuter < 1.2 then return end
+    local core = math.max(1.0, rOuter - 1.0)
+    gfx.setColor(WHITE)
+    gfx.fillCircleAtPoint(x, y, rOuter)
+    gfx.setColor(BLACK)
+    gfx.fillCircleAtPoint(x, y, core)
+    gfx.setColor(WHITE)
+end
+
+-- 8) Schalter (rein visuell, mechanisch — Auftrag: Switch/Bridge Visual
+-- Polish). Kleine dunkle Nocke direkt IN der Ringbahn. BEIDE Richtungen sind
+-- gleichzeitig sichtbar: CW-Seite = Zustand A, CCW-Seite = Zustand B. Die
+-- AKTIVE Seite ist gefüllt + kräftig (große helle Marke + Richtungspfeil),
+-- die inaktive Seite nur als kleinere Kontur — aus normaler 400x240-Spiel-
+-- ansicht sofort lesbar (kein 1-px-Detail). Drei Varianten (config.switchStyle):
+--   "A": runde Nocke mit zwei seitlichen Pfeilspitzen (aktiv dick, inaktiv dünn)
+--   "B": kapselförmige Nocke (rotierte Ellipse) mit Endmarken (aktiv gefüllt)
+--   "C": runde Nocke mit aktivem Punkt + Richtungsnase, inaktive Seite Kontur
+-- Beim echten Umschalten (2 Frames) wird die Nocke radial eingedrückt und die
+-- aktive Marke kurz vergrößert (mechanischer Snap, kein weiches Tween). Kein
+-- Text (kein A/B, kein CW/CCW). Kein Gameplay-Effekt.
 local function drawSwitch(sw)
     local radius = Render.ringRadius(sw.ring)
     local x, y = geo.polar(config.centerX, config.centerY, radius, sw.angle)
@@ -1143,10 +1271,11 @@ local function drawSwitch(sw)
 
     -- Press-Offset: nur bei echtem Umschalten und wenn der Spieler an diesem
     -- Schalter steht (kurzer 2-Frame-Zähler). 1-2 px nach innen, kein Rest.
-    local press = 0
-    if Render.switchPressFrames > 0
+    local pressing = Render.switchPressFrames > 0
         and state.player.ring == sw.ring
-        and math.abs(geo.delta(state.player.angle, sw.angle)) <= config.switchPressProximity then
+        and math.abs(geo.delta(state.player.angle, sw.angle)) <= config.switchPressProximity
+    local press = 0
+    if pressing then
         press = config.switchPressOffset
     end
     -- Vor-Kontakt-Spannung (Atmosphäre): nähert sich der Spieler dem Schalter
@@ -1164,16 +1293,63 @@ local function drawSwitch(sw)
     end
     local bx, by = x + perpx * press + tanx * lash, y + perpy * press + tany * lash
 
-    -- Grundkörper: dunkle Nocke auf der weißen Bahn.
+    local style = config.switchStyle or "C"
+    local bodyR = config.switchBodyRadius
+
+    -- Grundkörper: dunkle Nocke (Kreis oder Kapsel) auf der weißen Bahn.
     gfx.setColor(BLACK)
-    gfx.fillCircleAtPoint(bx, by, config.switchBodyRadius)
-    -- Richtungsspitze (weiße Kerbe in der Nocke): A -> CW, B -> CCW.
-    local dir = isA and 1 or -1
-    gfx.setColor(WHITE)
-    drawArrowTip(
-        bx + tanx * dir * (config.switchBodyRadius - 1.5),
-        by + tany * dir * (config.switchBodyRadius - 1.5),
-        tanx * dir, tany * dir, perpx, perpy, true)
+    if style == "B" then
+        fillOval(bx, by, sw.angle, config.switchCapsuleLong, config.switchCapsuleShort, BLACK)
+    else
+        gfx.fillCircleAtPoint(bx, by, bodyR)
+    end
+
+    -- Beide Richtungen gleichzeitig: CW (+tangential) = A, CCW (-tangential) = B.
+    -- Variante A: zwei Pfeilspitzen (aktiv dick, inaktiv dünn).
+    -- Variante B: Kapsel mit Endmarken (aktiv gefüllt, inaktiv Kontur).
+    -- Variante C: aktiver Punkt + gefüllte Richtungsnase (aktiv), Kontur (inaktiv).
+    local activeDist = bodyR - 2.9   -- aktiver Punkt (C)
+    local inactiveDist = bodyR - 2.1 -- inaktive Kontur (C), Pfeilspitzen (A)
+    local sides = { { dir = 1, active = isA }, { dir = -1, active = not isA } }
+    for _, side in ipairs(sides) do
+        local dirAngle = sw.angle + (side.dir == 1 and 0 or 180)
+        gfx.setColor(WHITE)
+        if style == "A" then
+            local mx = bx + tanx * side.dir * inactiveDist
+            local my = by + tany * side.dir * inactiveDist
+            local len = side.active and config.switchArrowLen or config.switchArrowLenInactive
+            local width = side.active and (config.switchArrowWidth + (pressing and 1 or 0)) or config.switchArrowWidthInactive
+            local half = side.active and 2.2 or 1.6
+            drawChevronTip(mx, my, dirAngle, len, half, width)
+        elseif style == "B" then
+            local dist = config.switchCapsuleLong - 2.5
+            local mx = bx + tanx * side.dir * dist
+            local my = by + tany * side.dir * dist
+            if side.active then
+                gfx.fillCircleAtPoint(mx, my,
+                    config.switchCapsuleMark + (pressing and 0.5 or 0))
+            else
+                drawRing(mx, my, config.switchCapsuleMarkInactive)
+            end
+        else -- "C": aktiver Punkt + gefüllte Richtungsnase, inaktiv Kontur
+            if side.active then
+                local px = bx + tanx * side.dir * activeDist
+                local py = by + tany * side.dir * activeDist
+                gfx.fillCircleAtPoint(px, py,
+                    config.switchMarkActive + (pressing and 0.3 or 0))
+                local nx = bx + tanx * side.dir * ((config.switchNoseTip + config.switchNoseBase) / 2)
+                local ny = by + tany * side.dir * ((config.switchNoseTip + config.switchNoseBase) / 2)
+                drawArrowHead(nx, ny, dirAngle,
+                    (config.switchNoseTip - config.switchNoseBase) / 2,
+                    config.switchNoseHalf + (pressing and 0.4 or 0))
+            else
+                local mx = bx + tanx * side.dir * inactiveDist
+                local my = by + tany * side.dir * inactiveDist
+                drawRing(mx, my, config.switchMarkInactive)
+            end
+        end
+    end
+
     -- Kleines Verknüpfungssymbol (weiß) in der Nocke (optionaler Hinweis).
     Render.drawSymbol(sw.symbol, bx, by, 3, WHITE)
     gfx.setColor(WHITE)
@@ -1220,7 +1396,7 @@ end
 -- Gefülltes Oval (Polygon-Approximation, 8 Punkte) an (x,y) mit Halbachsen
 -- rLong (radial) und rShort (tangential), Winkel 0° = 12 Uhr, CW positiv.
 -- Keine Sprite-Rotation nötig; billige primitive 1-Bit-Operationen.
-local function fillOval(x, y, angle, rLong, rShort, color)
+fillOval = function(x, y, angle, rLong, rShort, color)
     local ax, ay, bx, by = Render.bodyAxisVectors(angle)
     gfx.setColor(color)
     local pts = {}
@@ -1275,6 +1451,13 @@ local function drawPlayer()
         fillOval(x, y, angle, rHalo - comp, rHalo, WHITE)
         fillOval(x, y, angle, rContour - comp, rContour, BLACK)
         fillOval(x, y, angle, rBall - comp, rBall, WHITE)
+    elseif Render.playerVisual.landingFramesRemaining > 0 then
+        -- Ruhiges Landing nach dem gemeinsamen Transit: 1 px radiale
+        -- Kompression, wenige Frames, kein Positions-Offset.
+        local comp = 1
+        fillOval(x, y, angle, rHalo - comp, rHalo, WHITE)
+        fillOval(x, y, angle, rContour - comp, rContour, BLACK)
+        fillOval(x, y, angle, rBall - comp, rBall, WHITE)
     else
         gfx.setColor(WHITE)
         gfx.fillCircleAtPoint(x, y, rHalo)
@@ -1312,32 +1495,7 @@ local function drawPlayer()
     gfx.setColor(WHITE)
 end
 
--- Baby-Ziel (generisch, Raum 2): kleine Andockmulde auf der Zielbahn.
--- Leer = schmalerer schwarzer Bogen (Vertiefung) mit zwei weißen Randmarken
--- (○-artige Mulde); besetzt = das Baby sitzt sichtbar darin (Zeichenreihenfolge:
--- Mulde vor dem Baby). Kein Text, kein Symbol.
-local function drawBabyGoal()
-    local babyDef = state.room.baby
-    if not babyDef then
-        return
-    end
-    local radius = Render.ringRadius(babyDef.goal.ring)
-    local ang = babyDef.goal.angle
-    local arc = config.babyGoalArcDeg
-    local sA = geo.norm(ang - arc / 2)
-    local eA = geo.norm(ang + arc / 2)
-    -- Vertiefung in der weißen Bahn: schmalerer schwarzer Bogen, die Bahn bleibt
-    -- an den Rändern sichtbar -> dezent als Ruheplatz lesbar, nicht als Blende.
-    gfx.setColor(BLACK)
-    gfx.setLineWidth(config.trackWidth - 4)
-    gfx.drawArc(config.centerX, config.centerY, radius, sA, eA)
-    gfx.setLineWidth(1)
-    -- Bewusst unauffällig: KEINE weißen Dock-Brackets (die „○ -> fertig“-Metapher
-    -- wird nicht weiter betont; Spieler und Baby reisen als Paar weiter).
-    gfx.setColor(WHITE)
-end
-
--- Baby (generisch, Raum 2): kleine Kugel derselben Art wie der Spieler
+-- Baby (generisch, Begleiter): kleine Kugel derselben Art wie der Spieler
 -- (~62 % des Player-Durchmessers), 1-px-Kontur, schwacher Halo, kleines Auge.
 -- Reaktionspriorität (rein visuell): Bridge-Transit > Goal-Settle > Landing >
 -- Bridge-Ready > Push > Blink > Idle. Beim Brückentransit radial interpoliert,
@@ -1442,24 +1600,7 @@ local function drawBaby(transferBridge)
     gfx.setColor(WHITE)
 end
 
--- 11) B-Hold-Fortschrittsring (Phase 10.4): weißer 1-px-Bogen um die sichtbare
---     Spielerfigur, Start bei 12 Uhr, im Uhrzeigersinn 0°->360° (Spiel-Winkel-
---     konvention, entspricht drawArc). progress=0 -> nichts, 0.5 -> halber
---     Bogen, ~1 -> fast geschlossen. Kein gefüllter Kreis, keine Graustufen;
---     die Figur bleibt sichtbar. Rein read-only (nur Zeichnen).
-local function drawRestartHoldRing()
-    local p = Render.restartHoldProgress or 0
-    if p <= 0 then
-        return
-    end
-    local x, y = Render.playerScreenPosition()
-    gfx.setColor(WHITE)
-    gfx.setLineWidth(1)
-    gfx.drawArc(x, y, config.restartHoldRingRadius, 0, math.min(360, p * 360))
-    gfx.setLineWidth(1)
-end
-
--- 12) Crank-eingeklappt-Hinweis (Phase 10.4): kompakte 1-Bit-Box (schwarze
+-- 11) Crank-eingeklappt-Hinweis (Phase 10.4): kompakte 1-Bit-Box (schwarze
 --     Fläche, 1-px weiße Kontur, weißer Text) in der oberen rechten Ecke.
 --     Sichtbar nur im Gameplay mit eingeklappter Kurbel und solange der Raum
 --     nicht abgeschlossen ist (Startmenü zeichnet nie diese Szene). Rein
@@ -1534,9 +1675,6 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     -- 4) Bahnen (weiß, 8 px, beide sichtbare Ringe)
     drawTrack(Render.ringRadius("outer"))
     drawTrack(Render.ringRadius("inner"))
-    -- 4b) Baby-Ziel-Mulde (generisch, Raum 2): auf der Zielbahn, unter den
-    --     Brücken/Gate, damit sie nie von ausgefahrenen Balken verdeckt wird.
-    drawBabyGoal()
     -- 5) Blenden (Preview-Halo unmittelbar vor dem jeweiligen Element)
     for _, sh in ipairs(state.room.shutters) do
         drawShutter(sh, previewOf(sh.id))
@@ -1562,15 +1700,14 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     drawElementMarks()
     -- 9b) Raumabschluss-Impuls (Atmosphäre): über den Bahnen, unter dem Spieler.
     drawCompletionPulse(currentRoomIndex)
-    -- 9c) Baby (generisch, Raum 2): vor dem Spieler, damit der Spieler visuell
-    --     wichtiger bleibt und das Baby in seiner Mulde sichtbar ist.
+    -- 9c) Baby (generisch, Begleiter): vor dem Spieler, damit der Spieler
+    --     visuell wichtiger bleibt und das Baby als Begleiter sichtbar ist.
     drawBaby(transferBridge)
     -- 10) Spieler (bleibt ganz oben)
     drawPlayer()
-    -- 11) B-Hold-Restart-Fortschrittsring (direkt um die Figur, 1-px-Bogen von
-    --     12 Uhr im Uhrzeigersinn 0°->360°, nur bei aktivem Hold) + globales
-    --     Crank-eingeklappt-Hinweis-Overlay (rein visuell, 1-Bit).
-    drawRestartHoldRing()
+    -- 11) Globales Crank-eingeklappt-Hinweis-Overlay (rein visuell, 1-Bit).
+    --     Der frühere B-Hold-Restart-Fortschrittsring wurde entfernt (B-Taste
+    --     Rework: kein B-Hold-Restart mehr).
     drawCrankOverlay(roomComplete)
 
     -- „ROOM COMPLETE" nur außerhalb des finalen Raum-6-Stillstands (dort soll

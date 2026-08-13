@@ -1,4 +1,8 @@
--- Tests für die Baby-Mechanik (generisch, Raum 2) + Raum-1-Regression.
+-- Tests für die Baby-Mechanik (generisch, Begleiter) + Raum-1-Regression.
+-- Neue Produktregel: KEIN Ablageziel — das Baby ist Begleiter. Der finale
+-- Raumausgang (Gate) verlangt das Baby am Gate (gemeinsamer Raumausgang);
+-- normale Brücken innerhalb eines Raums bleiben ohne Baby nutzbar. Das Baby
+-- wird in Folge-Räume mitgenommen (carry).
 -- Verwendet die echten Leveldaten (Levels[1], Levels[2]) und synthetische
 -- Aufrufe. Erwartet, dass core/config, core/geometry, core/state, core/undo,
 -- world/room, world/bridge, world/gate, world/baby, ui/render, ui/camera und
@@ -52,7 +56,7 @@ do
     check(State.baby == nil, "room1 state: State.baby nil")
 end
 
--- --- Raum 1: Lösungsweg funktioniert unverändert ---------------------------
+-- --- Raum 1: Lösungsweg funktioniert unverändert (ohne Baby) ---------------
 do
     setup(Levels[1])
     -- CW 0 -> 100: S1@90 CW überquert -> A (B1 aus, D1 zu)
@@ -67,32 +71,34 @@ do
     check(res.used and res.kind == "bridge", "room1 lösung: A -> Brücke")
     Bridge.update(0.5)
     check(State.player.ring == "inner", "room1 lösung: Player auf inner")
-    -- CCW 270 -> 180: Gate T@180 (frei) -> abgeschlossen
+    -- CCW 270 -> 180: Gate T@180 (frei, kein Baby) -> abgeschlossen
     Room.movePlayer(-90)
     check(approx(State.player.angle, 180), "room1 lösung: Player am Gate 180")
     local gres = Room.tryUseConnection()
     check(gres.used and gres.kind == "gate" and gres.roomComplete == true, "room1 lösung: Gate -> abgeschlossen")
 end
 
--- --- Raum 2: Baby-Initialisierung + Gate gesperrt --------------------------
+-- --- Raum 2: Baby-Initialisierung + KEIN Ablageziel mehr --------------------
 do
     local r2 = Levels[2]
     check(r2.name == "Nicht allein", "room2: Name")
     check(r2.rings.outer == 6 and r2.rings.inner == 5, "room2: Ringe 6/5")
     check(r2.baby ~= nil and r2.baby.start.ring == "outer" and r2.baby.start.angle == 60, "room2: Baby-Start")
-    check(r2.baby.goal.ring == "inner" and r2.baby.goal.angle == 300, "room2: Baby-Ziel")
+    check(r2.baby.goal == nil, "room2: kein Baby-Ablageziel (goal) mehr")
     check(#r2.switches == 0 and #r2.shutters == 0, "room2: keine Schalter/Blenden")
     check(#r2.bridges == 1 and r2.bridges[1].id == "B0" and r2.bridges[1].free == true and r2.bridges[1].angle == 180, "room2: B0 frei @180")
-    check(r2.gate.id == "T" and r2.gate.angle == 0 and r2.gate.babyLocked == true, "room2: Gate babyLocked @0")
+    check(r2.gate.id == "T" and r2.gate.angle == 0 and r2.gate.free == true and r2.gate.babyLocked == nil,
+        "room2: Gate frei (kein babyLocked, kein Ablageziel-Kopplung)")
 
     setup(Levels[2])
     check(State.baby ~= nil, "room2 state: Baby vorhanden")
     check(State.baby.ring == "outer" and State.baby.angle == 60, "room2 state: Baby Startposition")
-    check(State.baby.settled == false, "room2 state: Baby nicht eingerastet")
+    check(State.baby.settled == false, "room2 state: Baby nicht eingerastet (settled immer false)")
     check(State.baby.lastPushDirection == 1, "room2 state: lastPushDirection CW")
     check(State.elementStates["B0"] == true, "room2 state: B0 aktiv")
-    check(State.elementStates["T"] == false, "room2 state: Gate inaktiv")
-    check(Gate.isUsable(r2.gate, "inner", 0) == false, "room2: Gate vor Ziel gesperrt")
+    check(State.elementStates["T"] == true, "room2 state: Gate T mechanisch frei (aktiv)")
+    -- Das Gate verlangt jetzt das Baby am Ausgang (gemeinsamer Raumausgang).
+    check(Gate.isUsable(r2.gate, "inner", 0) == false, "room2: Gate ohne Baby am Ausgang gesperrt")
 end
 
 -- --- Schieben: CW ----------------------------------------------------------
@@ -176,7 +182,7 @@ do
     State.player.angle = 176
     State.baby.angle = 184
     Room.tryUseConnection()
-    local total = Config.sharedBridgeHold + Config.sharedBridgeDuration + Config.sharedBabyLead
+    local total = Config.sharedBridgeHold + Config.sharedBabyLead + Config.sharedPlayerDuration
     Bridge.update(total * 0.5) -- halb durch
     local bp = Bridge.getBabyTransitProgress() or 0
     local pp = Bridge.getTransitProgress() or 0
@@ -184,6 +190,55 @@ do
     check(bp > pp, "shared mid: Baby-Fortschritt > Player-Fortschritt (voraus)")
     Bridge.update(total)
     check(State.player.ring == "inner" and State.baby.ring == "inner", "shared mid: nach Abschluss beide inner")
+end
+
+-- --- Gemeinsamer Transit: Baby läuft VOR dem Player (kein Overlap) --------
+do
+    setup(Levels[2])
+    State.player.angle = 176
+    State.baby.angle = 184
+    Room.tryUseConnection()
+    local t = Bridge.getTransit()
+    check(t ~= nil and t.shared, "anim: gemeinsamer Transit")
+    check(approx(Bridge.getBabyTransitProgress() or 0, 0), "anim: Baby-Start bei 0")
+    check(approx(Bridge.getTransitProgress() or 0, 0), "anim: Player-Start bei 0 (Hold+Lead)")
+    -- Formation: der Player startet hinter dem Baby (visuelle Achs-Gleitphase),
+    -- nicht exakt auf der Achse.
+    local dir = (State.baby and State.baby.lastPushDirection) or 1
+    check(t.playerStartAngle ~= nil
+        and approx(t.playerStartAngle, Geometry.norm(t.angle - dir * Config.sharedFormationGapDeg)),
+        "anim: Player-Formationsstart hinter dem Baby")
+    -- Baby startet zuerst (eigene kürzere Dauer): während der Lead-Phase ist
+    -- der Player noch bei 0, das Baby schon unterwegs.
+    Bridge.update(Config.sharedBridgeHold)   -- Ende Hold
+    Bridge.update(0.04)                       -- elapsed 0.09
+    local bp = Bridge.getBabyTransitProgress() or 0
+    local pp = Bridge.getTransitProgress() or 0
+    check(bp > 0 and approx(pp, 0), "anim: Baby startet vor dem Player (Lead)")
+    -- Mittendrin: Baby deutlich voraus (radiale Trennung, kein Overlap).
+    Bridge.update(0.11)                       -- elapsed 0.20
+    bp = Bridge.getBabyTransitProgress() or 0
+    pp = Bridge.getTransitProgress() or 0
+    check(bp > 0.5 and pp > 0, "anim: beide auf der Brücke")
+    check(bp - pp > 0.15, "anim: Baby deutlich vor Player (radial getrennt)")
+    local babyR = Render.babyRadius() or 0
+    local playerR = Render.playerRadius() or 0
+    check(math.abs(babyR - playerR) >= 2, "anim: radiale Trennung >= 2px (kein Overlap)")
+    -- Baby landet ZUERST (Landing-Event vor dem Abschluss).
+    local babyLanded = false
+    local completed = false
+    while not completed do
+        local done, shared, landed = Bridge.update(0.02)
+        if landed then babyLanded = true end
+        completed = done
+    end
+    check(babyLanded == true, "anim: Baby-Landing-Event gefeuert (Baby zuerst)")
+    -- Finale Positionen: Player auf der Achse, Baby voraus, kein Overlap.
+    check(State.player.ring == "inner" and State.baby.ring == "inner", "anim: beide inner")
+    check(approx(State.player.angle, 180), "anim: Player final auf Achse 180")
+    check(State.player.angle ~= State.baby.angle, "anim: kein Overlap (unterschiedliche Winkel)")
+    local gap = math.abs(Geometry.delta(State.player.angle, State.baby.angle))
+    check(gap >= 2, "anim: finaler Abstand >= 2°")
 end
 
 -- --- Solo-Player-Brücke (Baby NICHT am Dock) -------------------------------
@@ -200,23 +255,71 @@ do
     check(Render.babyBridgeReady() == false, "solo: Baby auf anderem Ring nicht ready")
 end
 
--- --- Ziel: Einrasten + Gate ------------------------------------------------
+-- --- Shared Bridge: leichte Ungenauigkeit wird akzeptiert -----------------
 do
     setup(Levels[2])
+    -- Beide leicht vom exakten Dock versetzt, aber visuell korrekt (Baby vorne,
+    -- Player dahinter): Shared Transit funktioniert zuverlässig.
+    State.player.angle = 173 -- 7° vor der Brückenachse (dockRange 12)
+    State.baby.angle = 187   -- 7° nach der Achse (babyDockRange 16)
+    local res = Room.tryUseConnection()
+    check(res.used == true and res.kind == "sharedBridge", "shared-offset: leicht versetzt -> Shared Transit")
+    check(Bridge.isCrossing() == true and Bridge.getTransit().shared == true, "shared-offset: gemeinsamer Transit")
+    Bridge.update(0.5)
+    check(State.player.ring == "inner" and State.baby.ring == "inner", "shared-offset: beide auf inner")
+end
+
+-- --- Shared Bridge: Baby zu weit weg -> kein Shared ------------------------
+do
+    setup(Levels[2])
+    State.player.angle = 176
+    State.baby.angle = 197 -- 17° > babyDockRange (16) von B0@180
+    local res = Room.tryUseConnection()
+    check(res.used == true and res.kind == "bridge", "shared-far: Baby zu weit -> Player-Solo-Brücke")
+    check(Bridge.isCrossing() == true and not Bridge.getTransit().shared, "shared-far: kein Shared-Transit")
+    Bridge.update(0.5)
+end
+
+-- --- Shared Bridge: Baby auf falscher Ringseite -> kein Shared -------------
+do
+    setup(Levels[2])
+    State.player.ring = "outer"
+    State.player.angle = 176
+    State.baby.ring = "inner" -- falsche Ringseite (Baby nicht am Player-Dock)
+    State.baby.angle = 184
+    local res = Room.tryUseConnection()
+    check(res.used == true and res.kind == "bridge", "shared-ring: Baby anderer Ring -> Player-Solo-Brücke")
+    check(Bridge.isCrossing() == true and not Bridge.getTransit().shared, "shared-ring: kein Shared-Transit")
+    Bridge.update(0.5)
+end
+
+-- --- Gemeinsamer Raumausgang (finales Gate verlangt das Baby) --------------
+do
+    setup(Levels[2])
+    -- Player am Gate (inner@0), Baby weit weg (inner@190): KEIN Wechsel.
     State.player.ring = "inner"
-    State.player.angle = 180
+    State.player.angle = 0
     State.baby.ring = "inner"
     State.baby.angle = 190
-    check(Gate.isUsable(Levels[2].gate, "inner", 0) == false, "gate: vor Ziel gesperrt")
-    Room.movePlayer(112)
-    check(State.baby.settled == true, "goal: Baby eingerastet")
-    check(State.baby.ring == "inner" and approx(State.baby.angle, 300), "goal: Baby exakt im Ziel 300")
-    check(State.elementStates["T"] == true, "goal: Gate aktiv")
-    check(Gate.isUsable(Levels[2].gate, "inner", 0) == true, "gate: nach Ziel benutzbar")
-    -- eingerastetes Baby ist unverrückbar
-    local before = State.baby.angle
-    Room.movePlayer(30)
-    check(State.baby.angle == before and State.baby.settled == true, "goal: eingerastetes Baby unbeweglich")
+    check(Gate.isUsable(Levels[2].gate, "inner", 0) == false,
+        "shared-exit: Player allein am Gate (Baby fern) -> kein Ausgang")
+    local resAlone = Room.tryUseConnection()
+    check(resAlone.used == false, "shared-exit: A am Gate ohne Baby -> keine Aktion")
+
+    -- Baby auf anderem Ring: ebenfalls kein Ausgang.
+    State.baby.ring = "outer"
+    State.baby.angle = 60
+    check(Gate.isUsable(Levels[2].gate, "inner", 0) == false,
+        "shared-exit: Baby auf anderem Ring -> kein Ausgang")
+
+    -- Player + Baby beide am Gate: Raumwechsel.
+    State.baby.ring = "inner"
+    State.baby.angle = 0
+    check(Gate.isUsable(Levels[2].gate, "inner", 0) == true,
+        "shared-exit: Player + Baby am Gate -> Ausgang nutzbar")
+    local resBoth = Room.tryUseConnection()
+    check(resBoth.used == true and resBoth.kind == "gate" and resBoth.roomComplete == true,
+        "shared-exit: A mit Baby am Gate -> Raum abgeschlossen")
 end
 
 -- --- Undo ------------------------------------------------------------------
@@ -228,7 +331,7 @@ do
     check(Undo.undo() == true, "undo: undo erfolgreich")
     check(approx(State.player.angle, 0), "undo: Playerposition wiederhergestellt")
     check(approx(State.baby.angle, 60), "undo: Babyposition wiederhergestellt")
-    check(State.baby.settled == false, "undo: settled wiederhergestellt")
+    check(State.baby.settled == false, "undo: settled false (kein Ablageziel)")
 end
 
 -- --- Restart (State.init = frischer Raum) ----------------------------------
@@ -238,21 +341,30 @@ do
     State.player.angle = 180
     State.baby.ring = "inner"
     State.baby.angle = 190
-    Room.movePlayer(112)
-    check(State.baby.settled == true, "restart: vorher eingerastet")
     setup(Levels[2])
     check(State.player.ring == "outer" and State.player.angle == 0, "restart: Player zurück outer@0")
     check(State.baby.ring == "outer" and approx(State.baby.angle, 60), "restart: Baby zurück outer@60")
-    check(State.baby.settled == false, "restart: settled false")
-    check(State.elementStates["T"] == false, "restart: Gate inaktiv")
+    check(State.baby.settled == false, "restart: settled false (kein Ablageziel)")
+    check(State.elementStates["T"] == true, "restart: Gate frei (mechanisch aktiv)")
 end
 
--- --- Raumwechsel-Cleanup (kein Baby-Leak) ----------------------------------
+-- --- Raumwechsel: Baby-Cleanup + Begleiter-Mitnahme ------------------------
 do
     setup(Levels[2])
     check(State.baby ~= nil, "wechsel: Baby in Raum 2 vorhanden")
     setup(Levels[1])
-    check(State.baby == nil, "wechsel: kein Baby-State in Raum 1")
+    check(State.baby == nil, "wechsel: ohne carry kein Baby-State in Raum 1")
+
+    -- Begleiter-Mitnahme: nach Raum 2 wird das Baby in Folge-Räume übernommen
+    -- (main.lua ruft State.init(roomData, babyCarried) mit carry=true).
+    setup(Levels[2])
+    State.init(Levels[3], true)
+    check(State.baby ~= nil, "wechsel-carry: Baby im Folge-Raum (3) vorhanden")
+    check(State.baby.ring == Levels[3].start.ring, "wechsel-carry: Baby auf dem Startring")
+    check(approx(State.baby.angle, Geometry.norm(0 - Config.babyCompanionOffsetDeg), 0.01),
+        "wechsel-carry: Baby direkt hinter der Spielerstartposition")
+    check(State.baby.ring == "outer" and State.baby.angle > 300,
+        "wechsel-carry: genau EIN Baby (Begleiter-Start), kein Doppel/Leak")
 end
 
 -- --- Renderer read-only ----------------------------------------------------
@@ -275,29 +387,32 @@ do
     check(Render.babyRadius() == nil, "render: kein Baby in Raum 1 -> nil")
 end
 
--- --- Vollständige deterministische Raum-2-Lösung ---------------------------
+-- --- Vollständige deterministische Raum-2-Lösung (neue Regel) --------------
+-- Kein Ablageziel: das Baby wird gemeinsam bis zum Gate geschoben.
 do
     setup(Levels[2])
     -- 1) Player CW 0 -> 176 schiebt Baby 60 -> ~184 (Richtung Brücke B0@180)
     Room.movePlayer(176)
     check(approx(State.player.angle, 176), "lösung: Player bei 176 (outer)")
     check(approx(State.baby.angle, 184, 0.5), "lösung: Baby bei ~184 (outer)")
-    -- 2) EIN A -> gemeinsamer Transfer (Player + Baby zusammen)
+    -- 2) EIN A -> gemeinsamer Transfer (Player + Baby zusammen auf inner)
     local res2 = Room.tryUseConnection()
     check(res2.used == true and res2.kind == "sharedBridge", "lösung: A -> gemeinsamer Transfer")
     Bridge.update(0.5)
     check(State.baby.ring == "inner" and approx(State.baby.angle, 190), "lösung: Baby auf inner@190")
     check(State.player.ring == "inner" and approx(State.player.angle, 180), "lösung: Player auf inner@180")
-    -- 4) Player CW schiebt Baby bis ins Ziel (180 -> 292, Baby 190 -> 300)
-    Room.movePlayer(112)
-    check(State.baby.settled == true, "lösung: Baby eingerastet")
-    check(State.baby.ring == "inner" and approx(State.baby.angle, 300), "lösung: Baby im Ziel 300")
-    check(State.elementStates["T"] == true, "lösung: Gate aktiv")
-    -- 5) Player weiter CW zum Gate (292 -> 0), Raum abschließen
-    Room.movePlayer(68)
+    -- 3) Player CW schiebt Baby bis kurz vor das Gate (inner@0): 180 -> 350
+    Room.movePlayer(170)
+    check(approx(State.player.angle, 350), "lösung: Player bei 350 (inner)")
+    -- 4) letzte kleine Strecke: beide am Gate (inner@0)
+    Room.movePlayer(10)
     check(approx(State.player.angle, 0), "lösung: Player am Gate 0")
+    check(State.baby.ring == "inner" and State.baby.angle <= Config.babyDockRange,
+        "lösung: Baby im Gate-Dock-Bereich")
+    -- 5) A am Gate MIT Baby -> Raum abgeschlossen (gemeinsamer Ausgang)
     local res5 = Room.tryUseConnection()
-    check(res5.used == true and res5.kind == "gate" and res5.roomComplete == true, "lösung: Gate -> Raum abgeschlossen")
+    check(res5.used == true and res5.kind == "gate" and res5.roomComplete == true,
+        "lösung: Gate -> Raum abgeschlossen (gemeinsam, kein Ablageziel)")
 end
 
 -- --- Level-Validator: alle Räume konsistent --------------------------------
@@ -333,23 +448,79 @@ do
     Render.babyBlinkRandom = nil
 end
 
--- --- Baby-Polish: Idle-Look + Bewegung resetet Idle ------------------------
+-- --- Baby-Polish: Player-Tracking (Pupille folgt dem Spieler) ---------------
+-- Grundregel: das Babyauge zeigt IMMER zum Spieler (Screen-Vektor), solange
+-- keine höher priorisierte Animation aktiv ist (Transit/Bridge-Ready/Push/
+-- Blink). Gleicher Ring (tangential) und verschiedene Ringe (inward/outward).
 do
     setup(Levels[2])
     Render.resetPlayerVisual()
+
+    -- Gleicher Ring: Player links vom Baby -> Pupille zeigt nach links.
+    State.player.ring = "outer"
+    State.player.angle = 300
+    State.baby.ring = "outer"
+    State.baby.angle = 40
     local bx, by = Render.babyScreenPosition()
-    Render.babyVisual.idleTime = 0
-    local ex0, ey0 = Render.babyEyePosition("normal", bx, by)
-    Render.babyVisual.idleTime = Config.idleGazeDelay + 2
-    local ex1, ey1 = Render.babyEyePosition("normal", bx, by)
-    local d0 = math.sqrt((ex0 - bx) ^ 2 + (ey0 - by) ^ 2)
-    local d1 = math.sqrt((ex1 - bx) ^ 2 + (ey1 - by) ^ 2)
-    check(d1 > d0, "polish idle: Idle-Look verstärkt die Pupillenrichtung zum Player")
-    check(approx(d0, Config.babyLookBase, 0.05), "polish idle: Basis-Awareness entspricht babyLookBase")
-    -- Bewegung resetet die Baby-Idle-Zeit
-    Render.babyVisual.idleTime = 3
-    Render.notePlayerMovement(5)
-    check(Render.babyVisual.idleTime == 0, "polish idle: Bewegung resetet Baby-Idle")
+    local ex, ey = Render.babyEyePosition("normal", bx, by)
+    check(ex < bx, "tracking: Player links -> Pupille zeigt links")
+
+    -- Player rechts -> Pupille zeigt rechts.
+    State.player.angle = 100
+    local bx2, by2 = Render.babyScreenPosition()
+    local ex2, ey2 = Render.babyEyePosition("normal", bx2, by2)
+    check(ex2 > bx2, "tracking: Player rechts -> Pupille zeigt rechts")
+
+    -- Verschiedene Ringe: Player innen (Baby außen) -> inward-Komponente.
+    State.player.ring = "inner"
+    State.player.angle = 40
+    State.baby.ring = "outer"
+    State.baby.angle = 40
+    local bx3, by3 = Render.babyScreenPosition()
+    local ex3, ey3 = Render.babyEyePosition("normal", bx3, by3)
+    check(ey3 > by3, "tracking: Player innen -> Pupille zeigt nach innen (inward)")
+
+    -- Player außen (Baby innen) -> outward-Komponente.
+    State.player.ring = "outer"
+    State.player.angle = 40
+    State.baby.ring = "inner"
+    State.baby.angle = 40
+    local bx4, by4 = Render.babyScreenPosition()
+    local ex4, ey4 = Render.babyEyePosition("normal", bx4, by4)
+    check(ey4 < by4, "tracking: Player außen -> Pupille zeigt nach außen (outward)")
+
+    -- Pupil-Travel konstant babyLookTravel (klein, ruhig, kein googly-eye).
+    local d3 = math.sqrt((ex3 - bx3) ^ 2 + (ey3 - by3) ^ 2)
+    check(approx(d3, Config.babyLookTravel, 0.01), "tracking: Pupil-Travel = babyLookTravel (kein Idle-Gate)")
+
+    -- Blink: Blink-Visual gewinnt; danach sofort wieder Tracking-Basis.
+    Render.babyVisual.blinkFramesRemaining = Config.babyBlinkFrames
+    check(Render.babyEyeState() == "blink", "tracking-blink: Blink aktiv -> Blink-State")
+    Render.babyVisual.blinkFramesRemaining = 0
+    check(Render.babyEyeState() == "normal", "tracking-blink: nach Blink -> sofort Tracking-Basis")
+
+    -- Push: Push-Reaktion überschreibt kurz; danach wieder Tracking.
+    Render.noteBabyPush(1)
+    check(Render.babyEyeState() == "push", "tracking-push: Push -> Push-State (überschreibt)")
+    Render.babyVisual.pushFramesRemaining = 0
+    check(Render.babyEyeState() == "normal", "tracking-push: nach Push -> wieder Tracking-Basis")
+
+    -- Shared Transit: Transit-State gewinnt; danach wieder Tracking.
+    State.player.ring = "outer"
+    State.player.angle = 176
+    State.baby.ring = "outer"
+    State.baby.angle = 184
+    local res = Room.tryUseConnection()
+    check(res.used == true and res.kind == "sharedBridge", "tracking-transit: Shared-Transit (Vorbereitung)")
+    check(Render.babyEyeState() == "transit", "tracking-transit: Transit-State gewinnt")
+    Bridge.update(0.5)
+    check(Render.babyIsTransiting() == false, "tracking-transit: Transit beendet")
+    -- Weg von der Brücke -> kein Bridge-Ready mehr -> sofort Tracking-Basis.
+    State.player.ring = "inner"
+    State.player.angle = 90
+    State.baby.ring = "inner"
+    State.baby.angle = 100
+    check(Render.babyEyeState() == "normal", "tracking-transit: nach Transit (weg von Brücke) -> Tracking-Basis")
 end
 
 -- --- Baby-Polish: Reaktionspriorität ---------------------------------------
@@ -365,9 +536,10 @@ do
     State.baby.angle = 184
     Render.noteBabyPush(1)
     check(Render.babyEyeState() == "bridge", "polish priorität: Bridge-Ready schlägt Push")
-    -- Goal-Settle schlägt Idle
-    Render.noteBabySettled()
-    check(Render.babyEyeState() == "settle", "polish priorität: Goal-Settle schlägt Idle")
+    -- Landing (Ankunft nach Brückentransit) schlägt Idle/Push
+    Render.noteBabyPush(1)
+    Render.noteBabyLanding()
+    check(Render.babyEyeState() == "landing", "polish priorität: Landing schlägt Push/Idle")
 end
 
 -- --- Baby-Polish: Bridge-Ready (read-only) ----------------------------------
@@ -409,37 +581,18 @@ do
     setup(Levels[2])
     Render.resetPlayerVisual()
     Render.noteBabyPush(1)
-    Render.noteBabySettled() -- höhere Priorität: setzt Push auf 0, Settle aktiv
-    check(Render.babyVisual.settleFramesRemaining > 0 and Render.babyVisual.pushFramesRemaining == 0,
-        "polish reset: Settle-Reaktion aktiv, Push überstimmt (Vorbereitung)")
+    Render.noteBabyLanding() -- höhere Priorität: setzt Push auf 0, Landing aktiv
+    check(Render.babyVisual.landingFramesRemaining > 0 and Render.babyVisual.pushFramesRemaining == 0,
+        "polish reset: Landing-Reaktion aktiv, Push überstimmt (Vorbereitung)")
     -- Raumstart/Restart (Render.resetPlayerVisual) setzt den visuellen Zustand zurück
     Render.resetPlayerVisual()
-    check(Render.babyVisual.pushFramesRemaining == 0 and Render.babyVisual.settleFramesRemaining == 0,
+    check(Render.babyVisual.pushFramesRemaining == 0 and Render.babyVisual.landingFramesRemaining == 0,
         "polish reset: ResetPlayerVisual setzt Baby-Visual zurück")
     -- Undo setzt den visuellen Zustand ebenfalls zurück
     Render.noteBabyPush(1)
     Render.noteUndo()
     check(Render.babyVisual.pushFramesRemaining == 0,
         "polish reset: noteUndo setzt Baby-Visual zurück")
-end
-
--- --- Gemeinsamer Transit: kein konkurrierendes A + Reset + Visual-Priorität --
-do
-    setup(Levels[2])
-    State.player.angle = 176
-    State.baby.angle = 184
-    local res = Room.tryUseConnection()
-    check(res.used == true and res.kind == "sharedBridge", "shared2: A -> gemeinsamer Transit")
-    -- Während des Transits ist keine weitere A-Aktion möglich (kein zweites A)
-    local resMid = Room.tryUseConnection()
-    check(resMid.used == false, "shared2: während Transit kein zweites A")
-    -- Visual-Priorität: Transit schlägt alle anderen Baby-Reaktionen
-    Render.noteBabyPush(-1)
-    check(Render.babyEyeState() == "transit", "shared2: Transit-Priorität im Visual-State")
-    -- Reset (Restart/Raumwechsel via startRoom ruft Bridge.resetTransit)
-    Bridge.resetTransit()
-    check(Bridge.isCrossing() == false, "shared2: Reset beendet den Transit")
-    check(State.player.ring == "outer" and State.baby.ring == "outer", "shared2: kein State-Leak nach Reset")
 end
 
 TestReport.baby = { pass = pass, fail = fail }

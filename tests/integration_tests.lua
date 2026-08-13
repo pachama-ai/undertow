@@ -268,7 +268,7 @@ do
     -- Raum 2 hat keine Schalter: switchStates leer (kein Leak aus Raum 1).
     check(next(State.switchStates) == nil, "rwechsel1: keine Schalter in Raum 2")
     check(State.elementStates["B0"] == true, "rwechsel1: B0 frei aktiv (Raum 2)")
-    check(State.elementStates["T"] == false, "rwechsel1: Gate T inaktiv (babyLocked)")
+    check(State.elementStates["T"] == true, "rwechsel1: Gate T frei aktiv (Raum 2)")
     -- Baby frisch initialisiert (kein Leak aus Raum 1).
     check(State.baby ~= nil and State.baby.ring == "outer" and State.baby.angle == 60 and State.baby.settled == false,
         "rwechsel1: Baby frisch outer@60")
@@ -288,25 +288,27 @@ do
     Baby.resetTransit()
     Room.resetDockAssist()
     -- Raum-2-Zustand herstellen, der sich klar von Raum 3 unterscheidet:
-    -- Baby ins Ziel bringen -> babyLocked-Gate T aktiv (kein Schalter nötig).
+    -- Player + Baby auf inner (Begleiter), Undo gefüllt. Das Gate T ist frei
+    -- (kein Ablageziel mehr); der gemeinsame Ausgang prüft die Baby-Position.
     State.player.ring = "inner"
     State.player.angle = 292
     State.baby.ring = "inner"
     State.baby.angle = 300
-    State.settleBaby()
-    check(State.baby.settled == true, "rwechsel2: Raum-2-Baby eingerastet")
-    check(State.elementStates["T"] == true, "rwechsel2: Raum-2-T aktiv")
+    check(State.elementStates["T"] == true, "rwechsel2: Raum-2-T frei aktiv (Begleiter-Regel)")
     Undo.push(State.snapshot())
     check(Undo.count() == 1, "rwechsel2: 1 Undo")
-    -- startRoom-Äquivalent: Raum 2 -> Raum 3.
+    -- startRoom-Äquivalent: Raum 2 -> Raum 3 MIT Begleiter-Mitnahme
+    -- (main.lua übergibt babyCarried=true an State.init).
     Bridge.resetTransit()
     Baby.resetTransit()
     Room.resetDockAssist()
-    State.init(Levels[3])
+    State.init(Levels[3], true)
     Undo.clear()
     Room.init()
     check(State.room == Levels[3] and State.room.name == "Der lange Weg", "rwechsel2: State.room = Raum 3")
-    check(State.baby == nil, "rwechsel2: kein Baby-Leak nach Raum 3")
+    -- Begleiter-Mitnahme: das Baby ist im Folge-Raum als Begleiter präsent.
+    check(State.baby ~= nil and State.baby.ring == Levels[3].start.ring,
+        "rwechsel2: Baby als Begleiter in Raum 3 übernommen")
     check(State.player.ring == Levels[3].start.ring and State.player.angle == Levels[3].start.angle, "rwechsel2: Spielerstart = Raum 3")
     check(State.switchStates["S1"] == "B", "rwechsel2: S1 = Raum-3-Definition (B)")
     check(State.elementStates["T"] == false, "rwechsel2: T eingefahren (Raum 3)")

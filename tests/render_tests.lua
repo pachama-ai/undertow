@@ -86,6 +86,97 @@ do
     check(Render.switchVisualState("S1") == "B", "schalter: S1 B")
 end
 
+-- --- Schalterdarstellung: beidseitig + aktive Seite (neue Regel) ------------
+-- Der Schalter zeigt BEIDE Richtungen gleichzeitig (CW-Seite = Zustand A,
+-- CCW-Seite = Zustand B). Die AKTIVE Seite ist gefüllt (Punkt + Richtungsnase),
+-- die inaktive nur eine kleine Kontur (Mitte schwarz). Pixelprobe aus der
+-- ECHTEN Render-Pipeline (drawRoom -> drawSwitch). Eigener Raum, damit die
+-- Blende (sonst auf demselben Winkel) die Probe nicht verfälscht.
+do
+    local switchRoom = {
+        name = "SwitchPixel",
+        rings = { outer = 7, inner = 6 },
+        start = { ring = "outer", angle = 0 },
+        switches = { { id = "S1", ring = "outer", angle = 90, symbol = 1, onA = "B1", onB = "D1", state = "A" } },
+        shutters = { { id = "D1", ring = "outer", angle = 45 } },
+        bridges = { { id = "B0", angle = 270, free = true }, { id = "B1", angle = 180, free = false } },
+        gate = { id = "T", angle = 0, free = true },
+    }
+    setup(switchRoom) -- S1=A, S1 outer@90
+
+    -- Semantik-Helfer: welche tangentiale Seite ist aktiv?
+    local sA = Render.switchSideState("S1")
+    check(sA.cw == true and sA.ccw == false, "schalter-seiten: A -> CW-Seite aktiv")
+    State.setSwitch("S1", "B")
+    local sB = Render.switchSideState("S1")
+    check(sB.cw == false and sB.ccw == true, "schalter-seiten: B -> CCW-Seite aktiv")
+    State.setSwitch("S1", "A")
+
+    -- Pixelbild: Offscreen-Canvas mit der ECHTEN Render-Pipeline (drawRoom ->
+    -- drawSwitch). render.lua bindet gfx beim Laden; Sampling wie in input_tests.
+    local gfxApi = playdate.graphics
+    local function renderSwitchCanvas()
+        local img = gfxApi.image.new(400, 240)
+        gfxApi.pushContext(img)
+        local ok, err = pcall(function() Render.drawRoom(false, 1) end)
+        gfxApi.popContext()
+        if not ok then
+            error("schalter-canvas: " .. tostring(err))
+        end
+        return img
+    end
+    -- Anzahl weißer Pixel im (2*half+1)^2-Fenster um (cx,cy). Die gefüllte
+    -- aktive Marke liefert deutlich mehr weiße Pixel als die dünne Kontur-Marke.
+    local function countWhite(img, cx, cy, half)
+        half = half or 1
+        local n = 0
+        for dy = -half, half do
+            for dx = -half, half do
+                local sx = math.floor(cx + dx + 0.5)
+                local sy = math.floor(cy + dy + 0.5)
+                if sx >= 0 and sy >= 0 and sx < 400 and sy < 240 then
+                    if img:sample(sx, sy) == gfxApi.kColorWhite then
+                        n = n + 1
+                    end
+                end
+            end
+        end
+        return n
+    end
+
+    -- Markenpositionen (Variante C, Default): Schalter outer@90 -> (304,120);
+    -- tangential CW = +y. Aktiver Punkt bei bodyR-2.9, inaktive Kontur bei
+    -- bodyR-2.1. Der Test zielt auf die Default-Variante C (aktiver Punkt +
+    -- gefüllte Richtungsnase vs. inaktive Kontur).
+    local swX = 200 + Config.outerRadius * math.sin(math.rad(90))
+    local swY = 120 - Config.outerRadius * math.cos(math.rad(90))
+    local activeDist = Config.switchBodyRadius - 2.9
+    local inactiveDist = Config.switchBodyRadius - 2.1
+    local aX, aY = math.floor(swX + 0.5), math.floor(swY + activeDist + 0.5)
+    local iX, iY = math.floor(swX + 0.5), math.floor(swY - inactiveDist + 0.5)
+
+    -- S1=A: BEIDE Marken sichtbar; die aktive CW-Seite ist GEFÜLLT (Mitte
+    -- weiß), die inaktive CCW-Seite nur Kontur (Mitte schwarz). Das ist die
+    -- geforderte Lesbarkeit: aktive Richtung springt sofort ins Auge.
+    State.setSwitch("S1", "A")
+    local imgA = renderSwitchCanvas()
+    local aCw = countWhite(imgA, aX, aY, 2)
+    local aCcw = countWhite(imgA, iX, iY, 2)
+    check(aCw > 0, "schalter-pixel: A -> CW-Seite sichtbar (aktiv, gefüllt)")
+    check(aCcw > 0, "schalter-pixel: A -> CCW-Seite sichtbar (Kontur, beide Seiten)")
+    check(imgA:sample(aX, aY) == gfxApi.kColorWhite, "schalter-pixel: A -> aktive CW-Marke gefüllt (Mitte weiß)")
+    check(imgA:sample(iX, iY) ~= gfxApi.kColorWhite, "schalter-pixel: A -> inaktive CCW-Marke Kontur (Mitte schwarz)")
+
+    -- S1=B: Seiten vertauscht (Zustandswechsel aktualisiert die Darstellung).
+    State.setSwitch("S1", "B")
+    local imgB = renderSwitchCanvas()
+    local bCw = countWhite(imgB, aX, aY, 2)
+    local bCcw = countWhite(imgB, iX, iY, 2)
+    check(bCcw > 0, "schalter-pixel: B -> CCW-Seite sichtbar (aktiv, gefüllt)")
+    check(imgB:sample(iX, iY) == gfxApi.kColorWhite, "schalter-pixel: B -> aktive CCW-Marke gefüllt (Mitte weiß)")
+    check(imgB:sample(aX, aY) ~= gfxApi.kColorWhite, "schalter-pixel: B -> inaktive CW-Marke Kontur (Mitte schwarz)")
+end
+
 -- --- Brücken-/Gate-Visualzustand -----------------------------------------
 do
     setup(makeRenderRoom()) -- S1=A -> B1 aktiv; B0 frei aktiv; T frei aktiv
@@ -94,6 +185,78 @@ do
     check(Render.bridgeVisualState("T") == "active", "gate: T aktiv (frei)")
     State.setSwitch("S1", "B") -- B1 inaktiv, D1 offen
     check(Render.bridgeVisualState("B1") == "inactive", "brücke: B1 inaktiv (S1=B)")
+end
+
+-- --- Brückendarstellung: aktiv durchgehend, inaktiv unterbrochen -----------
+-- Aktive Brücken haben einen durchgehenden weißen Balken über die Lücke
+-- zwischen den Ringen; inaktive Brücken zeigen dort Schwarz (sichtbarer
+-- Spalt). Pixelprobe aus der ECHTEN Render-Pipeline (2 px tangential vom
+-- Mittelpunkt entfernt, damit das schwarze Element-Symbol nicht stört).
+do
+    local gfxApi = playdate.graphics
+    local function renderBridgeCanvas()
+        local img = gfxApi.image.new(400, 240)
+        gfxApi.pushContext(img)
+        local ok, err = pcall(function() Render.drawRoom(false, 1) end)
+        gfxApi.popContext()
+        if not ok then error("bridge-canvas: " .. tostring(err)) end
+        return img
+    end
+    local function bridgeSample(angle)
+        local rMid = (Config.outerRadius + Config.innerRadius) / 2
+        local mx = 200 + rMid * math.sin(math.rad(angle))
+        local my = 120 - rMid * math.cos(math.rad(angle))
+        local tx, ty = math.cos(math.rad(angle)), math.sin(math.rad(angle))
+        return math.floor(mx + tx * 2 + 0.5), math.floor(my + ty * 2 + 0.5)
+    end
+
+    setup(makeRenderRoom()) -- S1=A: B0 frei aktiv@270, B1 aktiv@180, T aktiv@0
+    local img = renderBridgeCanvas()
+    local bx0, by0 = bridgeSample(270)
+    local bx1, by1 = bridgeSample(180)
+    check(img:sample(bx0, by0) == gfxApi.kColorWhite, "brücke-pixel: aktive B0 durchgehend (Lücke weiß)")
+    check(img:sample(bx1, by1) == gfxApi.kColorWhite, "brücke-pixel: aktive B1 durchgehend (Lücke weiß)")
+
+    -- S1=B -> B1 inaktiv: Spalt sichtbar (Mitte schwarz), B0 bleibt aktiv.
+    State.setSwitch("S1", "B")
+    local img2 = renderBridgeCanvas()
+    check(img2:sample(bx1, by1) == gfxApi.kColorBlack, "brücke-pixel: inaktive B1 unterbrochen (Lücke schwarz)")
+    check(img2:sample(bx0, by0) == gfxApi.kColorWhite, "brücke-pixel: B0 bleibt aktiv (Lücke weiß)")
+end
+
+-- --- Bridge-Ready-Impuls: nur Visual, kein Gameplay-State ------------------
+do
+    setup(makeRenderRoom()) -- B0 frei aktiv@270
+    Render.resetObjectAnims() -- prevReady/bridgeReadyFrames frisch
+    -- Player weit vom Dock: kein Ready-Impuls.
+    State.player.ring = "outer"
+    State.player.angle = 40
+    Render.updateObjectAnimations(0.016)
+    local f0 = (Render.bridgeReadyFrames and Render.bridgeReadyFrames["B0"]) or 0
+    check(f0 == 0, "bridge-ready: weit weg kein Impuls")
+
+    -- Player am Dock der aktiven Brücke B0@270 -> kurzer Frame-Impuls startet.
+    State.player.angle = 270
+    local swBefore = {}
+    for k, v in pairs(State.switchStates) do swBefore[k] = v end
+    local elBefore = {}
+    for k, v in pairs(State.elementStates) do elBefore[k] = v end
+    Render.updateObjectAnimations(0.016)
+    local f1 = (Render.bridgeReadyFrames and Render.bridgeReadyFrames["B0"]) or 0
+    check(f1 > 0, "bridge-ready: am Dock startet Impuls (Frames=" .. tostring(f1) .. ")")
+    -- rein visuell: Gameplay-State bleibt unverändert.
+    local swSame, elSame = true, true
+    for k, v in pairs(State.switchStates) do if swBefore[k] ~= v then swSame = false end end
+    for k, v in pairs(swBefore) do if State.switchStates[k] ~= v then swSame = false end end
+    for k, v in pairs(State.elementStates) do if elBefore[k] ~= v then elSame = false end end
+    for k, v in pairs(elBefore) do if State.elementStates[k] ~= v then elSame = false end end
+    check(swSame and elSame, "bridge-ready: nur Visual, State unverändert")
+    -- Impuls läuft nach wenigen Frames aus (kein permanentes Blinken).
+    for _ = 1, Config.bridgeReadyFrames + 2 do
+        Render.updateObjectAnimations(0.016)
+    end
+    local f2 = (Render.bridgeReadyFrames and Render.bridgeReadyFrames["B0"]) or 0
+    check(f2 == 0, "bridge-ready: Impuls klingt aus (kein Blinken)")
 end
 
 -- --- Transitradius (linear) ----------------------------------------------

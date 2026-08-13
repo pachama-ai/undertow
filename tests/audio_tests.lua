@@ -25,7 +25,7 @@ end
 -- Mockt synth.new/controlsignal.new/getCurrentTime; zeichnet Waveform, ADSR,
 -- playNote/playMIDINote (Frequenz/Note, Volume, Dauer, when) und Stops auf.
 local function makeMockSound()
-    local names = { "movement", "switch", "bridge", "impact", "gate", "core" }
+    local names = { "movement", "switch", "bridge", "impact", "gate", "bridgeCross", "roomTrans", "babyPush", "babyImpact", "babyBridgeLayer", "core" }
     local idx = 0
     local mock = {
         synth = {},
@@ -91,9 +91,9 @@ local sndConst = playdate.sound
 do
     local mock = makeMockSound()
     Audio.init(mock)
-    check(#mock.created == 6, "init: 6 Synths erzeugt")
+    check(#mock.created == 11, "init: 11 Synths erzeugt")
     Audio.init() -- defensiv: kein erneutes Erzeugen
-    check(#mock.created == 6, "init: wiederholtes init erzeugt keine neuen Stimmen")
+    check(#mock.created == 11, "init: wiederholtes init erzeugt keine neuen Stimmen")
     check(Audio.synths.movement == mock.synths.movement, "init: Audio.synths zeigt auf Mock")
 end
 
@@ -199,6 +199,115 @@ do
     check(#Audio.synths.gate.calls == 1 and Audio.synths.gate.stopped == 0, "gate: resetRoom stoppt den Puls nicht")
     Audio.playGateTransition() -- weiterer Gate-Übergang (z. B. 3->4)
     check(#Audio.synths.gate.calls == 2, "gate weiter: ebenfalls ein Puls")
+end
+
+-- --- Brückenwechsel (neuer Sound, Transferstart) ---------------------------
+-- Kurzer mechanischer Zip+Snap beim tatsächlichen Bridge-Transferstart;
+-- klar getrennt von Schalterklick, Bridge-Extend und Raumübergang.
+do
+    freshAudio()
+    check(#Audio.synths.bridgeCross.calls == 0, "bridgeCross: anfangs kein Call")
+    Audio.playBridgeCrossing()
+    local calls = Audio.synths.bridgeCross.calls
+    -- Pass 3: Zip (sofort) + kleiner Lande-Tick (zeitversetzt) = 2 Noten,
+    -- aber EIN Transit-Sound (kein Frame-/Dock-Spam).
+    check(#calls == 2, "bridgeCross: Zip + Lande-Tick (2 Noten, 1 Transit)")
+    check(Audio.synths.bridgeCross.waveform == sndConst.kWaveSquare, "bridgeCross Waveform Square")
+    check(calls[1].pitch == Config.audioBridgeCrossFreq, "bridgeCross Startfrequenz (Zip)")
+    check(calls[1].len == Config.audioBridgeCrossDuration, "bridgeCross sehr kurz")
+    check(calls[1].when == nil, "bridgeCross: Zip sofort")
+    check(calls[2].pitch == Config.audioBridgeCrossTickFreq, "bridgeCross Lande-Tick Frequenz")
+    check(calls[2].len == Config.audioBridgeCrossTickLen, "bridgeCross Lande-Tick sehr kurz")
+    check(calls[2].when ~= nil and approx(calls[2].when, Config.audioBridgeCrossDuration),
+        "bridgeCross: Tick bei Landung (when = Start + Dauer)")
+    local cs = Audio.synths.bridgeCross.freqMod
+    check(cs ~= nil and #cs.events == 2, "bridgeCross: Glide gesetzt")
+    check(cs.events[2].value == Config.audioBridgeCrossEndFreq - Config.audioBridgeCrossFreq,
+        "bridgeCross: Abwärts-Glide (Zip)")
+    -- Kein interner Mehrfach-Trigger: ein zweiter Aufruf = ein zweiter Transit.
+    Audio.playBridgeCrossing()
+    check(#Audio.synths.bridgeCross.calls == 4, "bridgeCross: 2 Aufrufe = 2 Transits (kein Spam)")
+end
+
+-- --- Raumübergang (neuer Sound, gemeinsamer Raumabschluss) -----------------
+-- Größerer, tiefer ziehender Sweep; klar größer/länger als Brückenwechsel.
+do
+    freshAudio()
+    check(#Audio.synths.roomTrans.calls == 0, "roomTrans: anfangs kein Call")
+    Audio.playRoomTransition()
+    local calls = Audio.synths.roomTrans.calls
+    check(#calls == 1, "roomTrans: genau 1 Call")
+    check(Audio.synths.roomTrans.waveform == sndConst.kWaveTriangle, "roomTrans Waveform Triangle")
+    check(calls[1].pitch == Config.audioRoomTransFreq, "roomTrans Startfrequenz")
+    check(calls[1].len == Config.audioRoomTransDuration, "roomTrans Dauer")
+    local cs = Audio.synths.roomTrans.freqMod
+    check(cs ~= nil and #cs.events == 2, "roomTrans: Glide gesetzt")
+    check(cs.events[2].value == Config.audioRoomTransEndFreq - Config.audioRoomTransFreq,
+        "roomTrans: tiefer ziehender Sweep")
+    -- Klanghierarchie: Raumübergang deutlich länger als Brückenwechsel.
+    check(Config.audioRoomTransDuration > Config.audioBridgeCrossDuration,
+        "roomTrans: länger als Brückenwechsel (Klanghierarchie)")
+end
+
+-- --- Baby-Sounds (Begleiter): Push / Impact / Bridge-Layer -----------------
+do
+    freshAudio()
+    Audio.resetRoom(1)
+    -- Push: nur bei Flanke false->true (einmal pro Schub, nicht pro Frame).
+    check(#Audio.synths.babyPush.calls == 0, "babyPush: anfangs kein Call")
+    Audio.noteBabyPush(false)
+    check(#Audio.synths.babyPush.calls == 0, "babyPush: kein Kontakt -> kein Ton")
+    Audio.noteBabyPush(true)
+    check(#Audio.synths.babyPush.calls == 1, "babyPush: Kontakt -> genau 1 Ton")
+    Audio.noteBabyPush(true) -- gehalten
+    check(#Audio.synths.babyPush.calls == 1, "babyPush held: kein neuer Ton pro Frame")
+    Audio.noteBabyPush(false)
+    Audio.noteBabyPush(true) -- re-contact
+    check(#Audio.synths.babyPush.calls == 2, "babyPush re-contact: zweiter Ton")
+    local pc = Audio.synths.babyPush.calls[1]
+    check(Audio.synths.babyPush.waveform == sndConst.kWaveTriangle, "babyPush Waveform Triangle (weich)")
+    check(pc.pitch == Config.audioBabyPushFreq, "babyPush Frequenz")
+    check(pc.len == Config.audioBabyPushLen, "babyPush sehr kurz")
+    -- resetRoom setzt die Push-Flanke zurück (nächster Schub klingt wieder).
+    Audio.resetRoom(1)
+    Audio.noteBabyPush(true)
+    check(#Audio.synths.babyPush.calls == 3, "babyPush: resetRoom setzt Flanke zurück")
+
+    -- Impact: dumpf, nur bei Flanke (blockierter Schub an das Baby).
+    freshAudio()
+    check(#Audio.synths.babyImpact.calls == 0, "babyImpact: anfangs kein Call")
+    Audio.noteBabyImpact(false)
+    check(#Audio.synths.babyImpact.calls == 0, "babyImpact: kein Kontakt -> kein Ton")
+    Audio.noteBabyImpact(true)
+    check(#Audio.synths.babyImpact.calls == 1, "babyImpact: blockierter Schub -> 1 Ton")
+    Audio.noteBabyImpact(true) -- gehalten
+    check(#Audio.synths.babyImpact.calls == 1, "babyImpact held: kein neuer Ton pro Frame")
+    Audio.noteBabyImpact(false)
+    Audio.noteBabyImpact(true)
+    check(#Audio.synths.babyImpact.calls == 2, "babyImpact re-contact: zweiter Ton")
+    local ic = Audio.synths.babyImpact.calls[1]
+    check(Audio.synths.babyImpact.waveform == sndConst.kWaveSine, "babyImpact Waveform Sine (dumpf)")
+    check(ic.pitch == Config.audioBabyImpactFreq, "babyImpact Frequenz")
+    check(ic.pitch < Config.audioBabyPushFreq, "babyImpact tiefer als Push (dumpf)")
+
+    -- Shared Bridge: mechanischer Zip+Tick (bridgeCross) + heller Baby-Layer.
+    freshAudio()
+    Audio.playBridgeCrossing()
+    Audio.playBabyBridgeLayer()
+    check(#Audio.synths.bridgeCross.calls == 2, "babyBridge: bridgeCross Zip+Tick (1 Transit)")
+    check(#Audio.synths.babyBridgeLayer.calls == 1, "babyBridge: Layer 1 Call")
+    local bl = Audio.synths.babyBridgeLayer.calls[1]
+    check(Audio.synths.babyBridgeLayer.waveform == sndConst.kWaveSquare, "babyBridge Waveform Square (hell)")
+    check(bl.pitch == Config.audioBabyBridgeFreq, "babyBridge Frequenz")
+    check(bl.pitch > Config.audioBridgeCrossFreq, "babyBridge heller als mechanischer Zip")
+    check(bl.len == Config.audioBabyBridgeLen, "babyBridge sehr kurz")
+
+    -- Keine Sounds bei Blink/Idle (kein Auto-Trigger ohne gemeldetes Event).
+    freshAudio()
+    Audio.noteBabyPush(false)
+    Audio.noteBabyImpact(false)
+    check(#Audio.synths.babyPush.calls == 0 and #Audio.synths.babyImpact.calls == 0
+        and #Audio.synths.babyBridgeLayer.calls == 0, "baby: keine Sounds bei Blink/Idle")
 end
 
 -- Pflicht-Test 103-111: Core Pulse
@@ -358,6 +467,58 @@ do
     check(calls[2].pitch < calls[1].pitch, "p2 completion: Raum 5 tiefer/resonanter")
     Audio.playRoomCompletion()
     check(approx(Audio.synths.impact.calls[3].pitch, Config.audioCompletionFreq), "p2 completion: ohne Index = Basis")
+end
+
+-- --- Pass 3: Bridge-/Room-Trigger einmalig (Architektur) -------------------
+-- Room/Audio sind entkoppelt: Reines Andocken erzeugt KEINEN Bridge-Transit-
+-- Sound und kein Raumwechsel erzeugt keinen Room-Transition-Sound von selbst.
+-- Main verdrahtet die Hooks genau einmal pro echtem Ereignis; hier prüfen wir
+-- das Verhalten der Module + dass ein Hook-Aufruf genau einen Sound liefert.
+do
+    local dockRoom = {
+        name = "AudioDock",
+        rings = { outer = 7, inner = 6 },
+        start = { ring = "outer", angle = 0 },
+        switches = { { id = "S1", ring = "outer", angle = 90, symbol = 1, onA = "B1", onB = "D1", state = "A" } },
+        shutters = { { id = "D1", ring = "outer", angle = 90 } },
+        bridges = { { id = "B0", angle = 270, free = true }, { id = "B1", angle = 180, free = false } },
+        gate = { id = "T", angle = 0, free = true },
+    }
+    local function setupDock()
+        State.init(dockRoom)
+        Room.init()
+        Undo.clear()
+        Bridge.resetTransit()
+        Room.resetDockAssist()
+    end
+
+    -- nur Docking (Player im DockRange, kein A) -> kein Bridge-Transit-Sound.
+    freshAudio()
+    setupDock()
+    State.player.ring = "outer"
+    State.player.angle = 270 -- B0@270 frei aktiv, im DockRange
+    Room.updateDockAssist()
+    check(#Audio.synths.bridgeCross.calls == 0, "nur-docking: kein Bridge-Transit-Sound")
+    check(#Audio.synths.roomTrans.calls == 0, "nur-docking: kein Room-Transition-Sound")
+
+    -- echter Transit: tryUseConnection startet genau einen Transit; Main ruft
+    -- den Hook genau einmal -> ein Zip + ein Tick.
+    freshAudio()
+    setupDock()
+    State.player.ring = "outer"
+    State.player.angle = 270
+    local r = Room.tryUseConnection()
+    check(r.used == true and r.crossing == true, "transit-trigger: Transit startet")
+    Audio.playBridgeCrossing() -- der eine Hook-Aufruf aus main.lua
+    check(#Audio.synths.bridgeCross.calls == 2, "bridge-transit: genau 1 Zip + 1 Tick")
+
+    -- kein Raumwechsel -> kein Room-Transition-Sound.
+    check(#Audio.synths.roomTrans.calls == 0, "kein-raumwechsel: kein Room-Transition-Sound")
+    -- echter Raumwechsel -> genau einmal (Main ruft den Hook einmal auf).
+    Audio.playRoomTransition()
+    check(#Audio.synths.roomTrans.calls == 1, "raumwechsel: genau 1 Room-Transition-Sound")
+    Audio.playRoomTransition() -- zweiter Raumwechsel
+    check(#Audio.synths.roomTrans.calls == 2, "raumwechsel: 2 Aufrufe = 2 Übergänge (kein Frame-Spam)")
 end
 
 TestReport.audio = { pass = pass, fail = fail }

@@ -1,4 +1,5 @@
 build/
+build_screenshots/
 *.pdx/
 .DS_Store
 Thumbs.db

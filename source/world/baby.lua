@@ -1,10 +1,10 @@
--- Baby: kleines Wesen derselben Art wie der Spieler (generisch, Raum 2).
--- Kapselt die reine Baby-Logik: Schiebemathematik, Brückentransfer-Query,
--- isolierter Brückentransit und Ziel-Einrastung. Kein Rendering, keine
--- Eingabe, kein Undo. Alle Mutationen laufen über core/state.lua
--- (State.baby / State.setBaby / State.settleBaby), damit Undo und Restart
--- korrekt funktionieren. Keine Imports; die Module werden zentral in
--- main.lua geladen (Bridge wird zur Laufzeit als globale Tabelle aufgelöst).
+-- Baby: kleines Wesen derselben Art wie der Spieler (generisch, Begleiter).
+-- Kapselt die reine Baby-Logik: Schiebemathematik, Brückentransfer-Query und
+-- isolierter Brückentransit. Kein Rendering, keine Eingabe, kein Undo. Alle
+-- Mutationen laufen über core/state.lua (State.setBaby), damit Undo und
+-- Restart korrekt funktionieren. Es gibt KEIN Ablageziel (baby.goal) mehr.
+-- Keine Imports; die Module werden zentral in main.lua geladen (Bridge wird
+-- zur Laufzeit als globale Tabelle aufgelöst).
 
 Baby = {}
 
@@ -56,12 +56,12 @@ end
 
 -- Brückentransfer-Query (Fall A): kann das Baby an diesem aktiven Bridge-Dock
 -- zuerst über die Brücke geschickt werden? Bedingungen:
---   Baby auf demselben Ring wie der Spieler, nicht eingerastet,
+--   Baby auf demselben Ring wie der Spieler,
 --   Brücke aktiv UND für den Spieler nutzbar (DockRange),
 --   Baby innerhalb Config.babyDockRange der Brückenachse.
 function Baby.canTransfer(bridgeData, playerRing, playerAngle)
     local baby = state.baby
-    if not baby or baby.settled then
+    if not baby then
         return false
     end
     if baby.ring ~= playerRing then
@@ -76,11 +76,6 @@ function Baby.canTransfer(bridgeData, playerRing, playerAngle)
     return math.abs(geo.delta(baby.angle, bridgeData.angle)) <= config.babyDockRange
 end
 
--- Ist das Baby bereits im Ziel eingerastet? Read-only-Helfer.
-function Baby.isSettled()
-    return state.baby ~= nil and state.baby.settled == true
-end
-
 -- Read-only: liefert das Bridge-Dock, an dem ein Baby-Transfer aktuell bereit
 -- ist (Baby am Dock, Player dahinter, Brücke aktiv), oder nil. Reine Query,
 -- kein Gameplay-Effekt; wird vom Renderer für den visuellen "Ready"-Zustand
@@ -91,7 +86,7 @@ function Baby.findTransferReadyBridge()
         return nil
     end
     local baby = state.baby
-    if not baby or baby.settled then
+    if not baby then
         return nil
     end
     for _, b in ipairs(state.room.bridges) do
@@ -100,6 +95,20 @@ function Baby.findTransferReadyBridge()
         end
     end
     return nil
+end
+
+-- Read-only: berührt der Spieler das Baby gerade (gleicher Ring, Winkelabstand
+-- im Kontaktbereich)? Wird für den Baby-Impact-Sound beim blockierten Schub
+-- genutzt. Rein Query, kein Gameplay-Effekt. Kein Baby (nil) => false.
+function Baby.isContactingPlayer()
+    local baby = state.baby
+    if not baby then
+        return false
+    end
+    if baby.ring ~= state.player.ring then
+        return false
+    end
+    return math.abs(geo.delta(baby.angle, state.player.angle)) <= Baby.contactDeg() + 0.5
 end
 
 -- --- Isolierter Baby-Brückentransit (kurze radiale Bewegung) --------------

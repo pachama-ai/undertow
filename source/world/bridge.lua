@@ -42,14 +42,15 @@ end
 
 -- Fortschritt 0..1 während eines aktiven Transits, sonst nil. Kein Overshoot.
 -- Bei einem GEMEINSAMEN Transit (Player+Baby) ist das der Player-Fortschritt
--- (nach kurzem Halt + Lead), damit der Player knapp hinter dem Baby bleibt.
+-- (nach kurzem Halt + Lead, eigene Player-Dauer), damit der Player knapp
+-- hinter dem Baby bleibt.
 function Bridge.getTransitProgress()
     if not Bridge.isCrossing() then
         return nil
     end
     local t = Bridge.transit
     if t.shared then
-        local denom = t.duration
+        local denom = t.playerDuration
         if denom <= 0 then
             return 1
         end
@@ -63,13 +64,14 @@ function Bridge.getTransitProgress()
 end
 
 -- Baby-Fortschritt beim GEMEINSAMEN Transit (Baby startet nach dem Halt vor
--- dem Player). Sonst nil. Kein Overshoot.
+-- dem Player und bewegt sich mit eigener, kürzerer Dauer — es zieht dadurch
+-- sichtbar nach vorn und landet zuerst). Sonst nil. Kein Overshoot.
 function Bridge.getBabyTransitProgress()
     local t = Bridge.transit
     if not (t and t.active and t.shared) then
         return nil
     end
-    local denom = t.duration
+    local denom = t.babyDuration
     if denom <= 0 then
         return 1
     end
@@ -132,21 +134,26 @@ function Bridge.beginSharedTransit(bridgeData, fromRing)
         error("Bridge.beginSharedTransit: ungültiger fromRing '" .. tostring(fromRing) .. "'")
     end
     -- Player-Startwinkel für die visuelle Achs-Gleitphase (Hold+Lead): Der
-    -- Player bleibt kurz hinter dem am Dock wartenden Baby sichtbar und
-    -- gleitet erst auf die Brückenachse, statt sofort exakt darauf zu landen
-    -- (kein Überlappen der beiden Charaktere beim Transitstart).
-    local playerStartAngle = state.player.angle
+    -- Player startet auf einer sauberen Dockformation direkt hinter dem Baby
+    -- (aus den Figurenradien abgeleiteter Abstand, in der bisherigen Schieberich-
+    -- tung) und gleitet erst auf die Brückenachse — kein Überlappen der beiden
+    -- Charaktere beim Transitstart (sichtbarer Abstand bleibt erhalten).
+    local gapDeg = config.sharedFormationGapDeg or (config.playerRadius + config.babyRadius + 2) / config.innerRadius * (180 / math.pi)
+    local dir = (state.baby and state.baby.lastPushDirection) or 1
+    local playerStartAngle = geo.norm(bridgeData.angle - dir * gapDeg)
     Bridge.transit = {
         active = true,
         fromRing = fromRing,
         toRing = toRing,
         angle = bridgeData.angle,
         elapsed = 0,
-        duration = config.sharedBridgeDuration,
         hold = config.sharedBridgeHold,
         babyLead = config.sharedBabyLead,
+        babyDuration = config.sharedBabyDuration,
+        playerDuration = config.sharedPlayerDuration,
         shared = true,
         playerStartAngle = playerStartAngle,
+        babyLanded = false,
     }
     state.player.angle = Geometry.norm(bridgeData.angle)
     return true
@@ -155,18 +162,27 @@ end
 -- Schaltet den Transit weiter. Rückgabe true genau im Abschlussframe: dann
 -- werden Player (und bei gemeinsamem Transit auch das Baby) auf den Zielring
 -- gesetzt und der Transit deaktiviert. Kein Overshoot. Zweiter Rückgabewert:
--- true, wenn es ein gemeinsamer Player+Baby-Transit war (für UI-Landing).
+-- true, wenn es ein gemeinsamer Player+Baby-Transit war. Dritter Rückgabewert:
+-- true, wenn das Baby in DIESEM Frame erstmals den Zielring erreicht hat
+-- (Baby-Landing-Event für die Settle-/Blick-zurück-Animation; nur gemeinsam).
 function Bridge.update(dt)
     if not Bridge.isCrossing() then
-        return false, false
+        return false, false, false
     end
     local t = Bridge.transit
     t.elapsed = t.elapsed + dt
     local done
     if t.shared then
-        done = t.elapsed >= t.hold + t.duration + t.babyLead
+        done = t.elapsed >= t.hold + t.babyLead + t.playerDuration
     else
         done = t.elapsed >= t.duration
+    end
+    -- Baby-Landing: das Baby erreicht den Zielring früher als der Player
+    -- (eigene, kürzere Dauer). Einmalig melden (kein Repeat pro Frame).
+    local babyJustLanded = false
+    if t.shared and not t.babyLanded and (t.elapsed - t.hold) >= t.babyDuration then
+        t.babyLanded = true
+        babyJustLanded = true
     end
     if done then
         state.player.ring = t.toRing
@@ -177,9 +193,9 @@ function Bridge.update(dt)
             state.setBaby(t.toRing, Geometry.norm(t.angle + dir * config.babyBridgeExitOffset))
         end
         Bridge.transit = nil
-        return true, t.shared
+        return true, t.shared, babyJustLanded
     end
-    return false, t.shared
+    return false, t.shared, babyJustLanded
 end
 
 return Bridge

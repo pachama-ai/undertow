@@ -6,6 +6,9 @@
 
 State = {}
 
+local config <const> = Config
+local geo <const> = Geometry
+
 -- Referenz auf die unveränderte Leveldefinition des aktuellen Raums.
 -- State verändert diese Tabellen niemals.
 State.room = nil
@@ -24,15 +27,18 @@ State.player = {
     angle = 0,
 }
 
--- Baby-Runtime-Zustand (generisch, Raum 2): nil, wenn der Raum kein Baby hat.
+-- Baby-Runtime-Zustand (generisch): nil, wenn der Raum kein Baby hat.
 -- { ring, angle, settled, lastPushDirection }.
--- settled = Baby ist im Ziel eingerastet und nicht mehr verschiebbar.
+-- settled = immer false (kein Ablageziel mehr; Feld bleibt für Snapshot-/
+-- Undo-/Render-Kompatibilität im Datenmodell).
 State.baby = nil
 
 -- Initialisiert einen komplett frischen Raumzustand.
 -- roomData wird nur referenziert, niemals verändert. Ein zweiter Aufruf
 -- übernimmt keinerlei Zustände des vorherigen Raums.
-function State.init(roomData)
+-- carryBaby (optional): true, wenn ein in einem früheren Raum eingeführtes
+-- Baby als Begleiter in diesen Raum mitgenommen wird (kein Ablageziel).
+function State.init(roomData, carryBaby)
     State.room = roomData
     State.switchStates = {}
     for _, sw in ipairs(roomData.switches) do
@@ -48,6 +54,17 @@ function State.init(roomData)
             angle = roomData.baby.start.angle,
             settled = false,
             lastPushDirection = 1, -- CW-Standard (wie Player-Facing)
+        }
+    elseif carryBaby then
+        -- Begleiter-Start in Folge-Räumen (gemeinsamer Raumausgang): das Baby
+        -- startet direkt hinter der offiziellen Spielerstartposition (gleicher
+        -- Ring, kleiner Winkelversatz rückwärts) — keine Überlappung, kein
+        -- Segment, keine Kollision. Rein datengetrieben, keine Raum-Sonderlogik.
+        State.baby = {
+            ring = roomData.start.ring,
+            angle = geo.norm(roomData.start.angle - config.babyCompanionOffsetDeg),
+            settled = false,
+            lastPushDirection = 1,
         }
     else
         State.baby = nil
@@ -68,12 +85,6 @@ function State.deriveElements()
     end
     if State.room.gate and State.room.gate.free == true then
         State.elementStates[State.room.gate.id] = true
-    end
-
-    -- Baby-gesperrtes Gate (generisch): aktiv erst, wenn das Baby im Ziel sitzt.
-    -- Ermöglicht datengetrieben "Gate aktiv <=> Baby im Ziel" ohne Raum-Sonderlogik.
-    if State.room.gate and State.room.gate.babyLocked == true then
-        State.elementStates[State.room.gate.id] = (State.baby ~= nil and State.baby.settled == true)
     end
 
     -- Blenden sowie gesteuerte Brücken/Gate aus dem steuernden Schalter ableiten.
@@ -208,22 +219,6 @@ function State.setBabyPushDirection(direction)
         return
     end
     State.baby.lastPushDirection = direction
-end
-
--- Rastet das Baby exakt im Ziel ein (settled = true) und leitet die
--- Elementzustände neu ab, damit ein baby-gesperrtes Gate aktiv wird.
-function State.settleBaby()
-    if not State.baby then
-        return
-    end
-    local goal = State.room.baby and State.room.baby.goal
-    if not goal then
-        return
-    end
-    State.baby.settled = true
-    State.baby.ring = goal.ring
-    State.baby.angle = goal.angle
-    State.deriveElements()
 end
 
 return State

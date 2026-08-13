@@ -27,7 +27,14 @@ local bridgeSynth = nil   -- Sawtooth, Glide aufwärts
 local impactSynth = nil   -- Sine, tiefer Stoß
 local gateSynth = nil     -- Sine, langer tiefer Puls
 local coreSynth = nil     -- Sine, Kernpuls
+local bridgeCrossSynth = nil -- Square, kurzer Zip+Snap (Brückenwechsel)
+local roomTransSynth = nil   -- Triangle, tiefer ziehender Sweep (Raumübergang)
+local babyPushSynth = nil    -- Triangle, hoch/weich (Baby wird geschoben)
+local babyImpactSynth = nil  -- Sine, dumpf (blockierter Schub ans Baby)
+local babyBridgeLayerSynth = nil -- Square, hell (gemeinsamer Brückentransfer)
 local bridgeGlide = nil   -- Controlsignal für den Bridge-Glide
+local bridgeCrossGlide = nil -- Controlsignal für den Brückenwechsel-Sweep
+local roomTransGlide = nil   -- Controlsignal für den Raumübergangs-Sweep
 
 -- Reine Audiozustände (keine Gameplay-Wahrheit).
 local moveAccum = 0         -- 15°-Akkumulator (tatsächliche Ringstrecke)
@@ -35,6 +42,8 @@ local coreTimer = 0         -- Kernpuls-Zeit
 local coreRoomIndex = 1     -- Raumnummer für die Kernpuls-Frequenz
 local coreCompleted = false -- nach finaler Completion keine neuen Kernpulse
 local wasBlocked = false    -- Flankenerkennung Shutter-Kollision
+local wasBabyPushing = false -- Flankenerkennung Baby-Push (false->true)
+local wasBabyImpact = false  -- Flankenerkennung Baby-Impact (false->true)
 local bridgeSettleTimer = 0 -- Brücken-End-Klick (Pass 2, einmalig pro Ausfahren)
 local inited = false
 
@@ -68,6 +77,25 @@ function Audio.init(soundAPI)
     gateSynth = snd.synth.new(snd.kWaveSine)
     gateSynth:setADSR(0.01, 0.08, 0.3, 0.4)     -- langer tiefer Puls
 
+    bridgeCrossSynth = snd.synth.new(snd.kWaveSquare)
+    bridgeCrossSynth:setADSR(0.002, 0.04, 0.2, 0.02) -- kurz, etwas Körper, mechanisch
+    bridgeCrossGlide = snd.controlsignal.new()
+    bridgeCrossSynth:setFrequencyMod(bridgeCrossGlide)
+
+    roomTransSynth = snd.synth.new(snd.kWaveTriangle)
+    roomTransSynth:setADSR(0.02, 0.12, 0.6, 0.25)    -- mehr Körper, atmosphärisch
+    roomTransGlide = snd.controlsignal.new()
+    roomTransSynth:setFrequencyMod(roomTransGlide)
+
+    babyPushSynth = snd.synth.new(snd.kWaveTriangle)
+    babyPushSynth:setADSR(0.002, 0.04, 0, 0.02)   -- hoch, weich, kurz
+
+    babyImpactSynth = snd.synth.new(snd.kWaveSine)
+    babyImpactSynth:setADSR(0.002, 0.06, 0, 0.02) -- dumpf, kurz
+
+    babyBridgeLayerSynth = snd.synth.new(snd.kWaveSquare)
+    babyBridgeLayerSynth:setADSR(0.002, 0.03, 0, 0.02) -- hell, sehr kurz
+
     coreSynth = snd.synth.new(snd.kWaveSine)
     coreSynth:setADSR(0.01, 0.4, 0, 0.3)        -- weich, leise
 
@@ -79,6 +107,11 @@ function Audio.init(soundAPI)
         impact = impactSynth,
         gate = gateSynth,
         core = coreSynth,
+        bridgeCross = bridgeCrossSynth,
+        roomTrans = roomTransSynth,
+        babyPush = babyPushSynth,
+        babyImpact = babyImpactSynth,
+        babyBridgeLayer = babyBridgeLayerSynth,
     }
 end
 
@@ -91,6 +124,8 @@ function Audio.resetRoom(roomIndex)
     coreCompleted = false
     coreRoomIndex = roomIndex or 1
     wasBlocked = false
+    wasBabyPushing = false
+    wasBabyImpact = false
     bridgeSettleTimer = 0
 end
 
@@ -192,6 +227,105 @@ function Audio.playBridgeExtend()
     bridgeSettleTimer = config.bridgeExtendStage1 + config.bridgeExtendStage2 + config.bridgeExtendStage3
 end
 
+-- --- Brückenwechsel (Sound) ------------------------------------------------
+-- Kurzer, mechanischer Zip+Snap beim tatsächlichen Transferstart über eine
+-- normale Brücke (solo ODER gemeinsam mit Baby). Klar anders als Schalterklick
+-- (klein/mechanisch) und Raumübergang (groß/atmosphärisch). Main ruft diesen
+-- Hook, sobald tryUseConnection einen Transit startet (crossing) — nicht beim
+-- bloßen Andocken, nicht erst nach der Landung.
+function Audio.playBridgeCrossing()
+    if not inited then return end
+    local t0 = snd.getCurrentTime()
+    bridgeCrossGlide:clearEvents()
+    bridgeCrossGlide:addEvent(0, 0, true)
+    bridgeCrossGlide:addEvent(config.audioBridgeCrossDuration,
+        config.audioBridgeCrossEndFreq - config.audioBridgeCrossFreq, true)
+    bridgeCrossSynth:playNote(
+        config.audioBridgeCrossFreq,
+        config.audioBridgeCrossVolume,
+        config.audioBridgeCrossDuration)
+    -- Pass 3 (Auftrag): kleiner mechanischer Abschluss beim Landen
+    -- (zip/shff -> tick). Zeitversetzt auf demselben Synth (when = Start +
+    -- Dauer) — genau EIN Transit-Sound pro Aufruf, kein Frame-Sound, kein Spam.
+    bridgeCrossSynth:playNote(
+        config.audioBridgeCrossTickFreq,
+        config.audioBridgeCrossTickVolume,
+        config.audioBridgeCrossTickLen,
+        t0 + config.audioBridgeCrossDuration)
+end
+
+-- --- Raumübergang (Sound) --------------------------------------------------
+-- Größerer, bedeutungsvoller Abschlusssound beim bestätigten GEMEINSAMEN
+-- Raumwechsel (Gate mit Baby). Tief ziehender Sweep — atmosphärisch, kein
+-- Sieg-Jingle. Main ruft den Hook beim Laden des nächsten Raums; ohne Baby am
+-- Gate wird gar kein Gate genutzt, daher wird der Sound nie „zu früh" gehört.
+function Audio.playRoomTransition()
+    if not inited then return end
+    roomTransGlide:clearEvents()
+    roomTransGlide:addEvent(0, 0, true)
+    roomTransGlide:addEvent(config.audioRoomTransDuration,
+        config.audioRoomTransEndFreq - config.audioRoomTransFreq, true)
+    roomTransSynth:playNote(
+        config.audioRoomTransFreq,
+        config.audioRoomTransVolume,
+        config.audioRoomTransDuration)
+end
+
+-- --- Baby-Sounds (Begleiter) ---------------------------------------------
+
+-- Weicher, hoher Ton, wenn der Spieler das Baby tatsächlich zu schieben
+-- beginnt (Kontaktaufnahme). Flankenerkennung: nur beim Übergang false->true
+-- (einmal pro Schub), gehaltener Kontakt erzeugt KEINEN neuen Ton pro Frame.
+-- Main meldet das reale Gameplayresultat (moveResult.babyMoved).
+function Audio.noteBabyPush(isPushing)
+    if not inited then
+        return
+    end
+    if isPushing then
+        if not wasBabyPushing then
+            babyPushSynth:playNote(
+                config.audioBabyPushFreq,
+                config.audioBabyPushVolume,
+                config.audioBabyPushLen)
+        end
+        wasBabyPushing = true
+    else
+        wasBabyPushing = false
+    end
+end
+
+-- Dumpfer, tiefer Ton, wenn ein Schub am Baby blockiert wird (Baby gegen
+-- Shutter/Grenze, Spieler drückt weiter dagegen). Flankenerkennung wie oben;
+-- Main meldet moveResult.blocked + Baby.isContactingPlayer().
+function Audio.noteBabyImpact(impacted)
+    if not inited then
+        return
+    end
+    if impacted then
+        if not wasBabyImpact then
+            babyImpactSynth:playNote(
+                config.audioBabyImpactFreq,
+                config.audioBabyImpactVolume,
+                config.audioBabyImpactLen)
+        end
+        wasBabyImpact = true
+    else
+        wasBabyImpact = false
+    end
+end
+
+-- Heller, kurzer Klingelton beim Start eines GEMEINSAMEN Brückentransfers
+-- (Player+Baby) — liegt über dem mechanischen Bridge-Crossing-Zip und klingt
+-- wie ein freundliches „Los geht's" für das Baby. Main ruft den Hook bei
+-- result.kind == "sharedBridge".
+function Audio.playBabyBridgeLayer()
+    if not inited then return end
+    babyBridgeLayerSynth:playNote(
+        config.audioBabyBridgeFreq,
+        config.audioBabyBridgeVolume,
+        config.audioBabyBridgeLen)
+end
+
 -- --- Aufprall an Blende (Teil D) -------------------------------------------
 
 -- Tiefer Sinus, schneller Abfall. Nur bei NEUEM echtem Kollisionsimpuls
@@ -289,6 +423,11 @@ function Audio.stopAll()
     impactSynth:stop()
     gateSynth:stop()
     coreSynth:stop()
+    bridgeCrossSynth:stop()
+    roomTransSynth:stop()
+    babyPushSynth:stop()
+    babyImpactSynth:stop()
+    babyBridgeLayerSynth:stop()
 end
 
 return Audio

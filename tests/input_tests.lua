@@ -1,22 +1,27 @@
--- Tests für Phase 10.4 „Eingaben": B-Geste (kurz = Undo, 0,6 s = Restart),
--- Hold-Fortschrittsring und Crank-eingeklappt-Hinweis.
+-- Tests für „Eingaben" nach dem B-Taste-Rework: B = Undo auf der Press-Edge
+-- (genau ein Undo pro physischem B-Drücken, KEIN B-Hold-Restart mehr),
+-- Crank-eingeklappt-Hinweis und D-Pad-Spielbarkeit.
 --
--- Teil A: BGesture-Unit (core/bgesture.lua) — deterministisch über dt
---   (Punkt 62): press ohne Release, Tap, 0.59 s, exakt 0.60 s, langes Halten,
---   Release nach Restart, neuer Tap, Fortschritt (25/50/Clamp).
--- Teil B: Controller-Contract — Gesture-Aktion auf echte Module angewendet
---   (Tap -> Undo genau einmal; Hold -> Raum frisch/derselbe, Undo 0, kein
---   Save-Write; während Bridge/Camera/Completion; leerer Undo-Stack).
--- Teil C: Render — setRestartHoldProgress (Clamp), Hold-Ring-Bogen um die
---   Figur (0 -> keiner, 0.5 -> halber Bogen 0..180°), Draw-Order Player ->
---   Ring -> Overlay, Crank-Overlay-Text (docked/undocked/roomComplete),
---   read-only.
--- Teil D: Crank-D-Pad — bei gedockter Kurbel bleiben D-Pad/A/B-Tap/B-Hold
---   voll spielbar (kein Gameplay-Gate durch Docking).
+-- Teil A: B-Input-Contract — ein B-Press erzeugt genau EIN Undo; Halten
+--   (0,1 s / 0,5 s / 0,6 s / 1,0 s / 1,5 s / 2,0 s) erzeugt KEINEN Restart,
+--   kein Mehrfach-Undo und leert den Stack nicht (Press-Edge, Teile 1/11/18);
+--   leerer Undo-Stack -> No-op (kein Crash, kein Restart, Teil 10);
+--   B-Undo schreibt Datastore nicht; B ist während Bridge-Transit gesperrt
+--   (Teil 12).
+-- Teil B: Undo-Semantik über echte Module — Schalter (inkl. abgeleiteter
+--   Elemente) und Baby-Push (Player- + Babyposition). Bridge-Transit (solo
+--   und gemeinsam) erzeugt BEWUSST keinen Undo-Snapshot und ist damit nicht
+--   undo-bar (dokumentiert, Teile 8/17 — keine heimlich neue Semantik).
+--   Es gibt kein Baby-Ablageziel mehr (kein settle).
+-- Teil C: Render — Crank-eingeklappt-Hinweis (docked/undocked/roomComplete),
+--   read-only. Kein B-Hold-Fortschrittsring mehr (entfernt, Teile 3/15).
+-- Teil D: Crank-D-Pad — D-Pad bleibt voll spielbar bei gedockter Kurbel.
+-- Teil E: D-Pad über den echten Inputpfad (Release-Fix 1).
 --
 -- Erwartet, dass core/config, core/geometry, core/state, core/undo,
--- core/audio, core/bgesture, world/player, world/room, world/bridge,
--- ui/render, ui/camera und data/levels per import geladen wurden.
+-- core/audio, core/save, core/sysmenu, world/player, world/room, world/bridge,
+-- world/baby, ui/render, ui/camera und data/levels per import geladen wurden.
+-- core/bgesture ist entfernt (B-Taste Rework) und wird nicht mehr getestet.
 
 local pass = 0
 local fail = 0
@@ -35,208 +40,24 @@ local function approx(a, b, tolerance)
     return math.abs(a - b) <= (tolerance or 1e-9)
 end
 
--- --- Teil A: BGesture-Unit ----------------------------------------------------
-local function press()
-    return BGesture.update(true, true, false, 0)
-end
-local function hold(dt)
-    return BGesture.update(false, true, false, dt)
-end
-local function release()
-    return BGesture.update(false, false, true, 0)
-end
-
--- Press allein: kein Undo, kein Restart (Punkt 63).
-BGesture.reset()
-check(press() == nil, "b: Press allein -> keine Aktion")
-check(BGesture.getProgress() == 0, "b: Press -> Fortschritt 0")
-
--- Kurzer Tap: Release vor 0,6 s -> genau 1 Undo (Punkt 64).
-BGesture.reset()
-press()
-hold(0.1)
-check(release() == "undo", "b: Tap (0,1 s) -> undo")
-check(release() == nil, "b: nach Release kein Doppel-Undo (Geste inaktiv)")
-
--- 0.59 s: noch kein Restart, Fortschritt ~0.9833 (Punkt 65).
-BGesture.reset()
-press()
-check(hold(0.59) == nil, "b: 0,59 s -> keine Aktion")
-check(approx(BGesture.getProgress(), 0.59 / Config.restartHoldDuration, 1e-9),
-    "b: 0,59 s -> progress = 0.9833")
-
--- exakt 0.60 s: genau 1 Restart, kein Undo (Punkt 66).
-BGesture.reset()
-press()
-check(hold(0.60) == "restart", "b: exakt 0,60 s -> restart")
-check(BGesture.getProgress() == 0, "b: nach Restart Fortschritt 0")
-
--- Release im Schwellenframe: Restart gewinnt (Punkt 12).
-BGesture.reset()
-press()
-hold(0.5)
-check(BGesture.update(false, false, true, 0.10) == "restart",
-    "b: Release im Schwellenframe (0,60 s gesamt) -> restart, kein Undo")
-
--- Langes Halten (1,5 s): nur EIN Restart (Punkt 13/67).
-BGesture.reset()
-press()
-check(hold(0.60) == "restart", "b: langes Halten -> 1. Restart")
-check(hold(0.9) == nil, "b: langes Halten -> danach keine weitere Aktion")
-
--- Release nach Hold-Restart: kein Undo (Punkt 14/68).
-BGesture.reset()
-press()
-hold(0.6)
-check(release() == nil, "b: Release nach Restart -> kein Undo")
-
--- Neuer Tap nach vollständigem Release (nach Restart + Reset) (Punkt 15/69).
-BGesture.reset()
-press()
-hold(0.6) -- restart
-BGesture.reset() -- z. B. durch Raumstart
-press()
-hold(0.1)
-check(release() == "undo", "b: neuer Tap nach Reset -> wieder undo")
-
--- Fortschritt 25 % / 50 % (Punkt 78/79).
-BGesture.reset()
-press()
-hold(0.15)
-check(approx(BGesture.getProgress(), 0.25, 1e-9), "b: 0,15 s -> progress 0.25")
-BGesture.reset()
-press()
-hold(0.30)
-check(approx(BGesture.getProgress(), 0.5, 1e-9), "b: 0,30 s -> progress 0.5")
-
--- Clamp: Fortschritt nie <0 oder >1 (Punkt 80).
-BGesture.reset()
-press()
-hold(0.599)
-local p = BGesture.getProgress()
-check(p >= 0 and p <= 1, "b: progress im gültigen Bereich (0..1)")
-
--- --- Teil B: Controller-Contract (echte Module) ------------------------------
--- Anwenden wie main.lua bei "undo".
-local function applyTapUndo()
+-- --- Teil A: B-Input-Contract -------------------------------------------------
+-- Anwenden wie main.lua updateRoom bei B-Press-Edge: Undo + Traversal-Reset +
+-- Render-Reset (exakte Produktions-Reihenfolge des B-Zweigs).
+local function applyBUndo()
     Room.resetDockAssist()
+    Room.resetSwitchTraversal()
     local restored = Undo.undo()
     if restored then
         Room.syncPhysicalShutters()
     end
+    Render.noteUndo()
+    Render.noteShutterBlocked(false)
     return restored
 end
--- Anwenden wie main.lua restartRoom (startRoom + stabile Kamera), exakte
--- Produktions-Reihenfolge.
-local function resetRoomContract(roomIndex)
-    local roomData = Levels[roomIndex]
-    Bridge.resetTransit()
-    Room.resetDockAssist()
-    State.init(roomData)
-    Undo.clear()
-    Room.init()
-    Camera.init(State.room.rings.outer)
-    Render.resetPlayerVisual()
-    Audio.resetRoom(roomIndex)
-    BGesture.reset()
-end
 
--- Tap mit gefülltem Undo-Stack: genau ein Undo (Punkt 26).
-resetRoomContract(1)
-State.setSwitch("S1", "A")
-Undo.push(State.snapshot())
-State.setSwitch("S1", "B")
-Undo.push(State.snapshot())
-check(Undo.count() == 2, "ctrl: Undo-Stack vor Tap = 2")
-BGesture.reset()
-press()
-hold(0.1)
-check(BGesture.update(false, false, true, 0) == "undo", "ctrl: Tap -> undo-Aktion")
-check(applyTapUndo() == true, "ctrl: Undo erfolgreich angewendet")
-check(Undo.count() == 1, "ctrl: Undo-Stack 2 -> 1")
-
--- Leerer Undo-Stack: kurzer Tap kein Crash, kein Restart (Punkt 27/70).
-resetRoomContract(1)
-check(Undo.count() == 0, "ctrl: Undo-Stack leer")
-BGesture.reset()
-press()
-hold(0.1)
-check(BGesture.update(false, false, true, 0) == "undo", "ctrl: Tap bei leerem Stack -> undo-Aktion")
-local okEmpty = pcall(function()
-    applyTapUndo()
-end)
-check(okEmpty, "ctrl: leerer Undo-Stack -> kein Crash (No-op)")
-
--- Hold mit gefülltem Undo-Stack: KEIN Undo vorher, Restart -> Undo 0 (Punkt 28/71).
-resetRoomContract(1)
-State.setSwitch("S1", "A")
-Undo.push(State.snapshot())
-State.setSwitch("S1", "B")
-Undo.push(State.snapshot())
-State.setSwitch("S1", "A")
-Undo.push(State.snapshot())
-State.setSwitch("S1", "B")
-Undo.push(State.snapshot())
-check(Undo.count() == 4, "ctrl: Undo-Stack vor Hold = 4")
-BGesture.reset()
-press()
-hold(0.3)
-check(Undo.count() == 4, "ctrl: während Hold (0,3 s) kein Undo (Stack bleibt 4)")
-check(BGesture.update(false, true, false, 0.30) == "restart", "ctrl: Hold -> restart-Aktion")
-resetRoomContract(1)
-check(Undo.count() == 0, "ctrl: nach Restart Undo = 0")
-
--- Erzeugt einen veränderten Raumzustand (Player + Schalter, falls vorhanden;
--- Raum 2 hat keinen Schalter -> Baby-Zustand ändern), damit der Restart-Reset
--- nachweisbar ist (Undo-Stack gefüllt, Position/State geändert).
-local function makeDirty(roomIndex)
-    local roomData = Levels[roomIndex]
-    State.player.angle = 200
-    if #roomData.switches > 0 then
-        State.setSwitch(roomData.switches[1].id, "A")
-    else
-        -- Raum 2: keine Schalter, einzige mutable Weltgröße ist das Baby.
-        State.baby.ring = "inner"
-        State.baby.angle = 300
-        State.settleBaby()
-    end
-    Undo.push(State.snapshot())
-end
-
--- Restart behält Raum (Räume 1-6, Abschlussphase A) (Punkt 72/19).
-for _, ri in ipairs({ 1, 2, 3, 4, 5, 6 }) do
-    resetRoomContract(ri)
-    makeDirty(ri)
-    BGesture.reset()
-    press()
-    hold(0.6)
-    resetRoomContract(ri)
-    check(State.room ~= nil and State.room.name == Levels[ri].name,
-        "ctrl-room" .. ri .. ": Restart bleibt Raum " .. ri)
-    check(State.player.ring == Levels[ri].start.ring and State.player.angle == Levels[ri].start.angle,
-        "ctrl-room" .. ri .. ": Player = Start")
-    check(Undo.count() == 0, "ctrl-room" .. ri .. ": Undo = 0")
-end
-
--- Save unverändert bei Restart (Punkt 73).
-local realDatastore = playdate.datastore
-local writeCount = 0
-playdate.datastore = {
-    read = function() return { highestRoom = 3 } end,
-    write = function() writeCount = writeCount + 1 end,
-    delete = function() return true end,
-}
-resetRoomContract(2)
-makeDirty(2)
-BGesture.reset()
-press()
-hold(0.6)
-resetRoomContract(2)
-check(writeCount == 0, "ctrl: B-Hold-Restart schreibt Datastore nicht")
-
--- Gating wie main.updateRoom: kurzer B-Tap-Undo NUR bei entsperrtem Gameplay
--- (Camera-Transition / Bridge-Transit / Completion sperren; Punkt 22).
-local function tapUndoAllowed()
+-- Gating wie main.updateRoom: B-Undo NUR bei entsperrtem Gameplay (Camera-
+-- Transition / Bridge-Transit / roomComplete sperren; B-Taste-Rework Teil 12).
+local function bUndoAllowed()
     if Camera.isTransitioning() then
         return false
     end
@@ -246,83 +67,148 @@ local function tapUndoAllowed()
     return true
 end
 
--- Hold während Bridge-Transit (Punkt 74): kurz -> kein Undo, Hold -> Restart.
+-- Produktions-Startsequenz (startRoom): Bridge.resetTransit ->
+-- Baby.resetTransit -> Room.resetDockAssist -> State.init -> Undo.clear ->
+-- Room.init -> Camera.init(stabil) -> Render.resetPlayerVisual ->
+-- Audio.resetRoom.
+local function resetRoomContract(roomIndex)
+    local roomData = Levels[roomIndex]
+    Bridge.resetTransit()
+    Baby.resetTransit()
+    Room.resetDockAssist()
+    State.init(roomData)
+    Undo.clear()
+    Room.init()
+    Camera.init(State.room.rings.outer)
+    Render.resetPlayerVisual()
+    Audio.resetRoom(roomIndex)
+end
+
+-- Datastore-Mock: B-Undo darf nie schreiben (kein Save-Effekt). Wird am Ende
+-- der Datei (Teil E) wieder restauriert.
+local realDatastore = playdate.datastore
+local writeCount = 0
+playdate.datastore = {
+    read = function() return { highestRoom = 3 } end,
+    write = function() writeCount = writeCount + 1 end,
+    delete = function() return true end,
+}
+
+-- Kurzer B-Druck mit gefülltem Stack: genau ein Undo (Teil 1/17 „Short B").
+resetRoomContract(1)
+State.setSwitch("S1", "A")
+Undo.push(State.snapshot())
+State.setSwitch("S1", "B")
+Undo.push(State.snapshot())
+check(Undo.count() == 2, "b: Undo-Stack vor B = 2")
+check(bUndoAllowed() == true, "b: B-Undo erlaubt (kein Lock)")
+check(applyBUndo() == true, "b: B-Press -> Undo erfolgreich")
+check(Undo.count() == 1, "b: genau ein Undo (Stack 2 -> 1)")
+check(writeCount == 0, "b: B-Undo schreibt Datastore nicht")
+
+-- B wird beliebig lange gehalten: pro physischem Druck genau EIN Undo, kein
+-- Restart, kein Wiederholen pro Frame (Teile 1/11/18: 0,1 s / 0,5 s / 0,6 s /
+-- 1,0 s / 1,5 s / 2,0 s). Da main B nur auf der Press-Edge verarbeitet, ist
+-- die Haltedauer ohne Einfluss — der Test belegt den Controller-Vertrag.
+for _, holdS in ipairs({ 0.1, 0.5, 0.6, 1.0, 1.5, 2.0 }) do
+    resetRoomContract(1)
+    State.player.angle = 200
+    State.setSwitch("S1", "A")
+    Undo.push(State.snapshot())
+    State.setSwitch("S1", "B")
+    Undo.push(State.snapshot())
+    check(Undo.count() == 2, "b-hold" .. holdS .. ": Stack = 2 vor B (" .. holdS .. " s)")
+    check(applyBUndo() == true, "b-hold" .. holdS .. ": B " .. holdS .. " s -> genau ein Undo")
+    check(Undo.count() == 1, "b-hold" .. holdS .. ": kein Mehrfach-Undo (Stack 2 -> 1)")
+    check(State.room ~= nil and State.room.name == Levels[1].name,
+        "b-hold" .. holdS .. ": kein Restart (Raumindex unverändert)")
+    check(State.player.angle == 200,
+        "b-hold" .. holdS .. ": Startposition wird NICHT geladen (kein Restart)")
+    check(Undo.count() == 1, "b-hold" .. holdS .. ": Undo-Stack nicht pauschal geleert")
+end
+
+-- Leerer Undo-Stack: B -> keine Gameplayänderung, kein Fehler, kein Restart
+-- (Teil 10/17 „Empty Undo").
+resetRoomContract(1)
+check(Undo.count() == 0, "b-empty: Undo-Stack leer")
+local angleEmpty = State.player.angle
+check(applyBUndo() == false, "b-empty: B -> kein Undo (No-op)")
+check(State.player.angle == angleEmpty, "b-empty: State unverändert (Winkel)")
+check(State.switchStates["S1"] == Levels[1].switches[1].state, "b-empty: State unverändert (S1)")
+check(State.room ~= nil and State.room.name == Levels[1].name, "b-empty: kein Restart")
+
+-- B während Bridge-Transit: gesperrt (Teil 12). Der Contract-Spiegel verbietet
+-- das Undo im Lock; der Stack bleibt unverändert (kein halber Zustand).
 resetRoomContract(1)
 State.setSwitch("S1", "A")
 Undo.push(State.snapshot())
 State.elementStates["B1"] = true
 Bridge.beginTransit({ id = "B1", angle = 270, free = false }, "outer")
-check(Bridge.isCrossing() == true, "ctrl-bridge: Transit aktiv (Vorbereitung)")
-check(Undo.count() == 1, "ctrl-bridge: Undo-Stack gefüllt (1)")
-BGesture.reset()
-press()
-hold(0.1)
-check(BGesture.update(false, false, true, 0) == "undo", "ctrl-bridge: Tap -> undo-Aktion")
-check(tapUndoAllowed() == false, "ctrl-bridge: kurzer B-Tap während Transit -> kein Undo (Lock)")
-check(Undo.count() == 1, "ctrl-bridge: Undo-Stack unverändert (kein Undo im Lock)")
+check(Bridge.isCrossing() == true, "b-bridge-lock: Transit aktiv (Vorbereitung)")
+check(bUndoAllowed() == false, "b-bridge-lock: B-Undo während Transit gesperrt")
+check(Undo.count() == 1, "b-bridge-lock: Stack unverändert (kein Undo im Lock)")
+
+-- --- Teil B: Undo-Semantik (Schalter + Baby + Bridge) -------------------------
+-- Schalter: echter Zustandswechsel -> B stellt vorherigen Switch-/Elementzustand
+-- wieder her (abgeleitet, kein manueller Rückbau; Teil 9/17 „Switch").
 resetRoomContract(1)
+State.setSwitch("S1", "B") -- Level-Start
+State.player.angle = 90
+Undo.push(State.snapshot()) -- vor der Handlung
+State.setSwitch("S1", "A")  -- Handlung: echter Wechsel
+State.player.angle = 120
+check(State.elementStates["B1"] == true, "undo-switch: B1 aktiv vor Undo (abgeleitet)")
+check(applyBUndo() == true, "undo-switch: B -> Undo")
+check(State.switchStates["S1"] == "B", "undo-switch: S1 zurück auf B")
+check(State.elementStates["B1"] == false, "undo-switch: B1 eingefahren (abgeleitet)")
+check(State.elementStates["D1"] == true, "undo-switch: D1 offen (abgeleitet)")
+check(State.player.angle == 90, "undo-switch: Playerposition zurück")
+
+-- Baby-Push (Raum 2): echter Schub -> B stellt Player- und Babyposition wieder
+-- her (Teil 7/17 „Baby Push").
+resetRoomContract(2)
+Room.movePlayer(70) -- schiebt das Baby -> genau 1 Undo-Snapshot (babyMoved)
+check(Undo.count() == 1, "undo-baby: Schub erzeugt 1 Snapshot")
+local startRing = Levels[2].start.ring
+local startAngle = Levels[2].start.angle
+local babyStartRing = Levels[2].baby.start.ring
+local babyStartAngle = Levels[2].baby.start.angle
+check(State.baby.ring == babyStartRing and not approx(State.baby.angle, babyStartAngle, 0.01),
+    "undo-baby: Baby wurde tatsächlich geschoben (Vorbereitung)")
+check(applyBUndo() == true, "undo-baby: B -> Undo")
+check(State.baby.ring == babyStartRing, "undo-baby: Baby-Ring zurück")
+check(approx(State.baby.angle, babyStartAngle, 0.01), "undo-baby: Baby-Winkel zurück")
+check(State.baby.settled == false, "undo-baby: Baby settled false")
+check(State.player.ring == startRing and approx(State.player.angle, startAngle, 0.01),
+    "undo-baby: Playerposition zurück")
+
+-- Bridge-Transit (solo): erzeugt BEWUSST keinen Undo-Snapshot (kein Snapshot-
+-- Kanal für Transits, siehe room.lua/bridge.lua). B nach abgeschlossenem
+-- Transit macht die Überquerung daher NICHT rückgängig — dokumentierte
+-- Semantik, kein versteckter Ring-Rollback (Teil 8/17 „Bridge", ehrlich).
+-- Dasselbe gilt für den gemeinsamen Player+Baby-Transit (Teil 17 „Shared
+-- Bridge"): das Undo-Modell snapshotet Transitaktionen bewusst nicht.
+resetRoomContract(1)
+State.player.angle = 270
 State.elementStates["B1"] = true
 Bridge.beginTransit({ id = "B1", angle = 270, free = false }, "outer")
-BGesture.reset()
-press()
-check(hold(0.6) == "restart", "ctrl-bridge: Hold -> restart-Aktion")
-resetRoomContract(1)
-check(Bridge.isCrossing() == false, "ctrl-bridge: nach Restart Transit aus")
+while Bridge.isCrossing() do
+    if Bridge.update(1 / Config.refreshRate) then
+        Room.resetSwitchTraversal()
+        Room.syncPhysicalShutters()
+    end
+end
+check(State.player.ring == "inner", "undo-bridge: Player auf inner nach Transit")
+check(Undo.count() == 0, "undo-bridge: Transit erzeugt keinen Snapshot (dokumentiert)")
+check(applyBUndo() == false, "undo-bridge: B bei leerem Stack -> No-op (kein Crash)")
+check(State.player.ring == "inner", "undo-bridge: kein versteckter Ring-Rollback")
 
--- Hold während Camera-Transition (Punkt 75): kurz -> kein Undo, Hold -> Restart.
-resetRoomContract(1)
-State.setSwitch("S1", "A")
-Undo.push(State.snapshot())
-Camera.beginRoomTransition(7, 6, 6, 5)
-check(Camera.isTransitioning() == true, "ctrl-camera: Transition aktiv (Vorbereitung)")
-BGesture.reset()
-press()
-hold(0.1)
-check(BGesture.update(false, false, true, 0) == "undo", "ctrl-camera: Tap -> undo-Aktion")
-check(tapUndoAllowed() == false, "ctrl-camera: kurzer B-Tap während Transition -> kein Undo")
-check(Undo.count() == 1, "ctrl-camera: Undo-Stack unverändert (kein Undo im Lock)")
-resetRoomContract(1)
-Camera.beginRoomTransition(7, 6, 6, 5)
-BGesture.reset()
-press()
-check(hold(0.6) == "restart", "ctrl-camera: Hold -> restart-Aktion")
-resetRoomContract(2) -- aktueller Raum ist 2
-check(State.room ~= nil and State.room.name == Levels[2].name,
-    "ctrl-camera: Restart bleibt Raum 2")
-check(Camera.isTransitioning() == false and Camera.getCurrentOuterRing() == 6,
-    "ctrl-camera: nach Restart Camera stabil auf Raum-2-outer")
-
--- Hold nach Raum-6-Completion (Punkt 76/20/47): kurzer Tap gesperrt
--- (Completion), Hold -> Raum 6 frisch (roomComplete-Zustand via Audio-
--- Completion angenähert; das eigentliche roomComplete-Flag ist main-lokal und
--- wird im Smoke geprüft). Raum 6 ist der Finalraum (Abschlussphase A).
-resetRoomContract(6)
-Audio.setCompleted()
-BGesture.reset()
-press()
-hold(0.1)
-check(BGesture.update(false, false, true, 0) == "undo", "ctrl-completion: Tap -> undo-Aktion")
-BGesture.reset()
-press()
-check(hold(0.6) == "restart", "ctrl-completion: Hold -> restart-Aktion")
-resetRoomContract(6)
-check(State.room ~= nil and State.room.name == Levels[6].name,
-    "ctrl-completion: Restart nach Completion bleibt Raum 6 (frisch)")
-Audio.resetRoom(6)
-Audio.update(4.5)
-check(true, "ctrl-completion: Audio nach Restart wieder aktiv (kein Crash)")
-
-playdate.datastore = realDatastore
-
--- --- Teil C: Render (Hold-Ring + Crank-Overlay) ------------------------------
+-- --- Teil C: Render (Crank-Overlay, read-only) --------------------------------
 -- render.lua erfasst `local gfx <const> = playdate.graphics` beim Laden; ein
 -- GFX-Mock-Umstecken greift daher NICHT. Verifikation über Offscreen-Sampling
 -- (image.new + pushContext + image:sample, Phase-10.1-Technik): die ECHTE
 -- Render-Pipeline zeichnet in eine Offscreen-Canvas, danach werden Pixel
--- gelesen. Draw-Order (Player -> Hold-Ring -> Overlay) ist strukturell in
--- drawRoom (drawPlayer(); drawRestartHoldRing(); drawCrankOverlay()); da der
--- Ring (Radius 10) die 7-px-Figur nicht überlappt, ist die Reihenfolge per
--- Pixel nicht unterscheidbar — sie wird per Codestruktur sichergestellt.
+-- gelesen.
 local realIsCrankDocked = playdate.isCrankDocked
 local docked = false
 playdate.isCrankDocked = function()
@@ -360,46 +246,12 @@ end
 resetRoomContract(1)
 State.player.angle = 0
 
--- setRestartHoldProgress Clamp (Punkt 80).
-Render.setRestartHoldProgress(0.5)
-check(Render.restartHoldProgress == 0.5, "render: setRestartHoldProgress(0.5)")
-Render.setRestartHoldProgress(-1)
-check(Render.restartHoldProgress == 0, "render: setRestartHoldProgress(-1) -> 0 (Clamp)")
-Render.setRestartHoldProgress(2)
-check(Render.restartHoldProgress == 1, "render: setRestartHoldProgress(2) -> 1 (Clamp)")
-Render.setRestartHoldProgress(0)
-
 -- playerScreenPosition: exakt der visuelle Mittelpunkt auf dem Spielerring
 -- (Punkt 97). Player outer@0 -> (200 + outerRadius*sin0, 120 - outerRadius*cos0).
 local px, py = Render.playerScreenPosition()
 check(approx(px, 200 + Config.outerRadius * math.sin(0), 0.001)
     and approx(py, 120 - Config.outerRadius * math.cos(0), 0.001),
     "render: playerScreenPosition = Polar(Spielerradius, Winkel)")
-
--- progress=0: kein Hold-Ring-Bogen (Punkt 96).
-Render.setRestartHoldProgress(0)
-local img0 = renderToCanvas(function() Render.drawRoom(false, 1) end)
-local inArcX = px + Config.restartHoldRingRadius * math.sin(math.rad(30))
-local inArcY = py - Config.restartHoldRingRadius * math.cos(math.rad(30))
-local outArcX = px + Config.restartHoldRingRadius * math.sin(math.rad(210))
-local outArcY = py - Config.restartHoldRingRadius * math.cos(math.rad(210))
-check(hasWhiteNear(img0, inArcX, inArcY) == false,
-    "render: progress 0 -> kein Hold-Ring")
-
--- progress=0.5: halber Bogen 0..180° (Punkt 96/78): In-Arc weiß, außerhalb schwarz.
-Render.setRestartHoldProgress(0.5)
-local img50 = renderToCanvas(function() Render.drawRoom(false, 1) end)
-check(hasWhiteNear(img50, inArcX, inArcY),
-    "render: progress 0.5 -> Ring im Bogen (30°) sichtbar")
-check(hasWhiteNear(img50, outArcX, outArcY) == false,
-    "render: progress 0.5 -> außerhalb des Bogens (210°) kein Ring")
-
--- progress ~1: fast geschlossener Ring (Punkt 96): 210° jetzt sichtbar.
-Render.setRestartHoldProgress(0.999)
-local imgFull = renderToCanvas(function() Render.drawRoom(false, 1) end)
-check(hasWhiteNear(imgFull, outArcX, outArcY),
-    "render: progress ~1 -> Ring auch bei 210° sichtbar (fast voll)")
-Render.setRestartHoldProgress(0)
 
 -- Crank-Overlay (Punkt 86/87/45/99): Textpixel im Overlay-Bereich.
 local overlaySampleX = Config.crankOverlayX + 40
@@ -418,14 +270,8 @@ check(hasWhiteNear(imgComplete, overlaySampleX, overlaySampleY, 4) == false,
     "render: roomComplete -> kein Crank-Hinweis (auch docked)")
 docked = false
 
--- Release/Reset löscht Ring (Punkt 81/82): BGesture-Reset -> main meldet 0.
-Render.setRestartHoldProgress(0.5)
-BGesture.reset()
-check(BGesture.getProgress() == 0, "render: Gesture-Reset -> progress 0")
-
 -- Render bleibt read-only (Punkt 100): drawRoom + Overlay verändern State/Undo/
 -- Room/Bridge/Camera/Audio/Save nicht.
-Render.setRestartHoldProgress(0.5)
 docked = true
 local beforeState = State.room.name
 local beforeUndo = Undo.count()

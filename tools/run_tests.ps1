@@ -57,7 +57,6 @@ try {
     $srcAudio = Join-Path $root 'source\core\audio.lua'
     $srcSave = Join-Path $root 'source\core\save.lua'
     $srcSysmenu = Join-Path $root 'source\core\sysmenu.lua'
-    $srcBgesture = Join-Path $root 'source\core\bgesture.lua'
     $srcPlayer = Join-Path $root 'source\world\player.lua'
     $srcRoom = Join-Path $root 'source\world\room.lua'
     $srcBridge = Join-Path $root 'source\world\bridge.lua'
@@ -121,7 +120,6 @@ try {
     if (-not (Test-Path -LiteralPath $srcTestsSave)) { throw "save_tests.lua fehlt: $srcTestsSave" }
     if (-not (Test-Path -LiteralPath $srcSysmenu)) { throw "sysmenu.lua fehlt: $srcSysmenu" }
     if (-not (Test-Path -LiteralPath $srcTestsSystemMenu)) { throw "system_menu_tests.lua fehlt: $srcTestsSystemMenu" }
-    if (-not (Test-Path -LiteralPath $srcBgesture)) { throw "bgesture.lua fehlt: $srcBgesture" }
     if (-not (Test-Path -LiteralPath $srcTestsInput)) { throw "input_tests.lua fehlt: $srcTestsInput" }
     if (-not (Test-Path -LiteralPath $srcTestsProgression)) { throw "progression_tests.lua fehlt: $srcTestsProgression" }
     if (-not (Test-Path -LiteralPath $srcTransition)) { throw "transition.lua fehlt: $srcTransition" }
@@ -135,7 +133,6 @@ try {
     Copy-Item -LiteralPath $srcAudio -Destination (Join-Path $srcDir 'core\audio.lua') -Force
     Copy-Item -LiteralPath $srcSave -Destination (Join-Path $srcDir 'core\save.lua') -Force
     Copy-Item -LiteralPath $srcSysmenu -Destination (Join-Path $srcDir 'core\sysmenu.lua') -Force
-    Copy-Item -LiteralPath $srcBgesture -Destination (Join-Path $srcDir 'core\bgesture.lua') -Force
     Copy-Item -LiteralPath $srcPlayer -Destination (Join-Path $srcDir 'world\player.lua') -Force
     Copy-Item -LiteralPath $srcRoom -Destination (Join-Path $srcDir 'world\room.lua') -Force
     Copy-Item -LiteralPath $srcTestsGeometry -Destination (Join-Path $srcDir 'geometry_tests.lua') -Force
@@ -201,7 +198,6 @@ local ok, err = pcall(function()
     import("core/audio")
     import("core/save")
     import("core/sysmenu")
-    import("core/bgesture")
     import("world/player")
     import("world/room")
     import("world/bridge")

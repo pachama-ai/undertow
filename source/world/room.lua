@@ -303,64 +303,51 @@ function Room.movePlayer(wantedDelta)
     result.switchChanges = switchChanges
     result.shutterTransitions = shutterTransitions
 
-    -- Baby-Push (generisch, Raum 2): nach dem Sweep. Bewegt sich der Spieler
-    -- auf demselben Ring auf das Baby zu und erreicht dessen Kontaktabstand,
-    -- wird das Baby um den restlichen Bewegungsanteil in Fahrtrichtung
-    -- geschoben (kein Ziehen, kein Durchspringen, Wraparound). Einrasten im
-    -- Ziel setzt babySettled und aktiviert ein ggf. baby-gesperrtes Gate.
-    -- Ein echter Schub zählt als zustandsändernde Spielerhandlung: Es entsteht
-    -- genau ein Undo-Snapshot (Frame-Anfang), falls nicht bereits ein
-    -- Schalterereignis in diesem Frame einen angelegt hat.
-    local babyMoved, babySettled = Room.applyBabyPush(playerStartAngle, direction, actual)
+    -- Baby-Push (generisch): nach dem Sweep. Bewegt sich der Spieler auf
+    -- demselben Ring auf das Baby zu und erreicht dessen Kontaktabstand, wird
+    -- das Baby um den restlichen Bewegungsanteil in Fahrtrichtung geschoben
+    -- (kein Ziehen, kein Durchspringen, Wraparound). Kein Ablageziel mehr —
+    -- das Baby ist Begleiter. Ein echter Schub zählt als zustandsändernde
+    -- Spielerhandlung: Es entsteht genau ein Undo-Snapshot (Frame-Anfang),
+    -- falls nicht bereits ein Schalterereignis in diesem Frame einen angelegt hat.
+    local babyMoved = Room.applyBabyPush(playerStartAngle, direction, actual)
     if babyMoved and not undoStored then
         undo.push(frameStartSnapshot)
         undoStored = true
     end
     result.undoStored = undoStored
     result.babyMoved = babyMoved
-    result.babySettled = babySettled or false
     return actual * direction, result
 end
 
 -- Bewegt das Baby nach einem Spieler-Sweep (aufgerufen aus movePlayer).
 -- Reine Orchestrierung: die Push-Mathematik liegt in Baby.computePush; die
--- Mutationen laufen über State (State.setBaby / State.settleBaby), damit Undo
--- und Restart korrekt funktionieren. Rückgabe: (moved, settled) — moved=true,
--- wenn das Baby bewegt/eingerastet wurde (dann ist ein Undo-Snapshot fällig);
--- settled=true, wenn es dabei exakt im Ziel eingerastet ist.
+-- Mutationen laufen über State (State.setBaby), damit Undo und Restart
+-- korrekt funktionieren. Rückgabe: moved=true, wenn das Baby bewegt wurde
+-- (dann ist ein Undo-Snapshot fällig). Es gibt kein Ablageziel/Einrasten mehr.
 function Room.applyBabyPush(playerStartAngle, direction, actualDist)
     local baby = state.baby
-    if not baby or baby.settled then
-        return false, false
+    if not baby then
+        return false
     end
-    -- Nur auf demselben Ring wird geschoben; ein eingerastetes Baby ist
-    -- unverrückbar und für den Spieler passierbar (in seiner Mulde versenkt).
+    -- Nur auf demselben Ring wird geschoben.
     if baby.ring ~= state.player.ring then
-        return false, false
+        return false
     end
     if actualDist <= 0 then
-        return false, false
+        return false
     end
     local oldAngle = baby.angle
     local newAngle, pushAmount, pushDir = Baby.computePush(baby.angle, playerStartAngle, direction, actualDist)
     if not newAngle then
-        return false, false
+        return false
     end
     state.setBabyPushDirection(pushDir)
     state.setBaby(baby.ring, newAngle)
-    -- Einrasten ins Ziel: bewegt sich das Baby auf dem Zielring und überstreicht
-    -- den Zielbereich (oder endet darin), wird es exakt im Ziel eingerastet.
-    local settled = false
-    local goal = state.room.baby and state.room.baby.goal
-    if goal and baby.ring == goal.ring then
-        local swept = geo.crossed(oldAngle, pushDir * pushAmount, goal.angle)
-        local inRange = math.abs(geo.delta(newAngle, goal.angle)) <= config.babyGoalRange
-        if swept == pushDir or inRange then
-            state.settleBaby()
-            settled = true
-        end
-    end
-    return true, settled
+    -- Kein Ablageziel mehr (Baby-Regel): das Baby wird nur geschoben, nie
+    -- abgelegt/eingerastet. Der gemeinsame Raumausgang (Gate) prüft die
+    -- Baby-Anwesenheit separat in Gate.isUsable.
+    return true
 end
 
 -- Führt die logische A-Aktion an der aktuellen Spielerposition aus.
@@ -545,9 +532,16 @@ function Room.updateDockAssist()
         local candidates = {}
         for _, b in ipairs(state.room.bridges) do
             if state.elementStates[b.id] == true then
-                local d = math.abs(geo.delta(playerAngle, b.angle))
-                if d <= config.dockAssistRange then
-                    candidates[#candidates + 1] = { kind = "bridge", id = b.id, angle = b.angle, dist = d }
+                -- Shared-Transfer bereits bereit (Baby am Dock, Player dahinter):
+                -- DIESE Brücke NICHT assistieren — ein Snap des Players auf die
+                -- Brückenachse würde Player und Baby überlappen (Silhouetten-
+                -- Verschmelzung, Pass „Bridge Handling"). Der Player steht dort
+                -- ohnehin innerhalb von dockRange und A funktioniert direkt.
+                if not Baby.canTransfer(b, playerRing, playerAngle) then
+                    local d = math.abs(geo.delta(playerAngle, b.angle))
+                    if d <= config.dockAssistRange then
+                        candidates[#candidates + 1] = { kind = "bridge", id = b.id, angle = b.angle, dist = d }
+                    end
                 end
             end
         end
