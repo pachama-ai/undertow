@@ -185,6 +185,7 @@ playNoteCount = 0
 local function resetRoomContract(roomIndex)
     local roomData = Levels[roomIndex]
     Bridge.resetTransit()
+    Baby.resetTransit()
     Room.resetDockAssist()
     State.init(roomData)
     Undo.clear()
@@ -301,13 +302,12 @@ check(readCount == 0 and writeCount == 0,
 Menu.hide()
 
 -- Mid-Room-State wird nicht persistiert: „Weiter" danach startet frisch
--- (Punkt 26/27/64).
+-- (Punkt 26/27/64). Raum 2 hat keine Schalter: der Baby-Push erzeugt den
+-- Mid-Room-Undo.
 State.init(Levels[2])
 Undo.clear()
 Room.init()
-Room.movePlayer(45)
-State.setSwitch("S1", "A")
-Undo.push(State.snapshot())
+Room.movePlayer(70) -- schiebt das Baby -> genau 1 Undo (babyMoved)
 check(Undo.count() == 1, "sm-menu: Mid-Room-Undo vor Weiter > 0 (Vorbereitung)")
 resetRoomContract(2) -- „Weiter" = startRoom(highestRoom=2) frisch
 assertFreshRoom(2, "sm-menu-continue:")

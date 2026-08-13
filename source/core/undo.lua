@@ -36,6 +36,14 @@ local function copySnapshot(snap)
         ring = snap.player.ring,
         angle = snap.player.angle,
     }
+    if snap.baby then
+        copy.baby = {
+            ring = snap.baby.ring,
+            angle = snap.baby.angle,
+            settled = snap.baby.settled,
+            lastPushDirection = snap.baby.lastPushDirection,
+        }
+    end
     return copy
 end
 

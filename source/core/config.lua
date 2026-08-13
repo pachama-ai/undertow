@@ -62,6 +62,38 @@ Config = {
     shutterSquintFrames = 6,   -- Zusammenkneifen: exakt 6 Frames (verbindlich)
     bridgeStretchAmount = 2,   -- maximale radiale Streckung (px je Seite)
 
+    -- Baby (Raum 2, generisch): kleines Wesen derselben Art wie der Spieler.
+    -- Der Spieler bleibt visuell wichtiger (kleiner, schwächerer Halo).
+    babyRadius = 3.7,              -- Körperradius (px) ~62 % des Player-Durchmessers (lesbar, kleiner als Player)
+    babyStroke = 1,                -- schwarze Kontur (px)
+    babyHalo = 1,                  -- weißer Halo (px), schwächer als der Player-Halo
+    babyPupilRadius = 1.3,         -- Pupille (px), lesbar in 1-Bit
+    babyGoalArcDeg = 24,           -- Ziel-Mulde: sichtbarer Bogen (± Grad um goal.angle)
+    babyDockRange = 10,            -- Baby gilt als "am Bridge-Dock" (Grad Abstand zu bridge.angle)
+    babyGoalRange = 6,             -- Zielbereich um goal.angle (Grad), vollständige Einrastung
+    babyBridgeExitOffset = 10,     -- Austrittsposition nach Baby-Brückentransit (Grad, in Schieberichtung)
+    babyBridgeAnimDuration = 0.25, -- Dauer des Baby-Brückentransits (s)
+
+    -- Baby-Polish (Lebendigkeit, rein visuell): eigene Blink-/Idle-/Reaktions-
+    -- Logik im Renderer (UI-State, nie Gameplay/Snapshot/Save).
+    babyBlinkMinInterval = 3.0,    -- Baby-Blink: frühestens nach 3 s Stillstand
+    babyBlinkMaxInterval = 7.0,    -- Baby-Blink: spätestens nach 7 s Stillstand
+    babyBlinkFrames = 3,           -- Baby-Blinkdauer in Frames (kurze tangentiale Lidlinie)
+    babyPushFrames = 5,            -- Push-Reaktion: Kompression + Augenweiten (Frames)
+    babySettleFrames = 8,          -- Goal-Settle-Reaktion: Kompression + Augenweiten (Frames)
+    babyLandingFrames = 6,         -- Bridge-Landing-Impuls nach dem Transit (Frames)
+    babyLookBase = 0.6,            -- Idle: Basis-Awareness der Pupille zum Player (px)
+    babyLookTravel = 1.2,          -- Bridge-Ready: Auge schaut radial zur Brücke/anderen Ring (px)
+    babyReadyPull = 1,             -- Bridge-Ready: Körper 1 px radial zur Brücke
+    babyReadyPulsePeriod = 1.2,    -- Bridge-Ready: subtiler Körper-/Dock-Puls (s)
+    babyReadyPulse = 0.5,          -- Bridge-Ready: 1-px-Pulsamplitude (px)
+
+    -- Gemeinsamer Brückentransit (Player + Baby, EIN A): kurzer Halt, dann
+    -- startet das Baby zuerst (Lead), der Player folgt; Gesamtdauer ~0.43 s.
+    sharedBridgeHold = 0.06,       -- Phase 1: kurzer Halt (Blick zur Brücke) (s)
+    sharedBabyLead = 0.05,         -- Phase 2: Baby startet vor dem Player (s)
+    sharedBridgeDuration = 0.32,   -- Bewegungsdauer (s) -> total ~0.43 s
+
     -- Audio (Phase 9.1): benannte Tuningwerte, alle Klänge rein synth.
     -- Konzept-zwingend: Klick alle 15° bei exakt 0.15; Brücke exakt 0.25 s;
     -- Kernpuls Raum 1 = 55 Hz alle 4.0 s. Der Rest sind Audio-Tuningwerte.
@@ -140,6 +172,7 @@ Config = {
     crankOverlayY = 8,
     crankOverlayWidth = 106,
     crankOverlayHeight = 34,
+    crankHintDuration = 6.0,       -- Crank-Hinweis nur die ersten X s pro Raum (Onboarding)
 
     -- Schalter-Darstellung (rein visuell, kein Gameplay): kleine mechanische
     -- Nocke in der Ringbahn mit gerichteter Spitze (A=CW, B=CCW) und kurzer

@@ -258,25 +258,25 @@ do
     check(Bridge.isCrossing() == true, "rwechsel1: crossing true vor Wechsel")
     -- startRoom-Äquivalent: Raum 1 -> Raum 2.
     Bridge.resetTransit()
+    Baby.resetTransit()
     Room.resetDockAssist()
     State.init(Levels[2])
     Undo.clear()
     Room.init()
-    check(State.room == Levels[2] and State.room.name == "Die ganze Runde", "rwechsel1: State.room = Raum 2")
+    check(State.room == Levels[2] and State.room.name == "Nicht allein", "rwechsel1: State.room = Raum 2")
     check(State.player.ring == Levels[2].start.ring and State.player.angle == Levels[2].start.angle, "rwechsel1: Spielerstart = Raum 2")
-    check(State.switchStates["S1"] == "B", "rwechsel1: S1 = Raum-2-Definition (B)")
-    check(State.switchStates["S2"] == "B", "rwechsel1: S2 = Raum-2-Definition (B)")
-    check(State.elementStates["B1"] == false, "rwechsel1: B1 eingefahren (Raum 2)")
-    check(State.elementStates["T"] == false, "rwechsel1: Gate T eingefahren (Raum 2)")
-    check(State.elementStates["D1"] == true and State.elementStates["D2"] == true, "rwechsel1: D1/D2 offen (Raum 2)")
+    -- Raum 2 hat keine Schalter: switchStates leer (kein Leak aus Raum 1).
+    check(next(State.switchStates) == nil, "rwechsel1: keine Schalter in Raum 2")
+    check(State.elementStates["B0"] == true, "rwechsel1: B0 frei aktiv (Raum 2)")
+    check(State.elementStates["T"] == false, "rwechsel1: Gate T inaktiv (babyLocked)")
+    -- Baby frisch initialisiert (kein Leak aus Raum 1).
+    check(State.baby ~= nil and State.baby.ring == "outer" and State.baby.angle == 60 and State.baby.settled == false,
+        "rwechsel1: Baby frisch outer@60")
     check(Undo.count() == 0, "rwechsel1: Undo leer")
     check(Bridge.isCrossing() == false, "rwechsel1: kein Transit")
     check(Room.isDockAssisting() == false, "rwechsel1: keine Assistenz")
-    -- Shutter-Runtime neu (Raum 2): D1/D2 vorhanden, logisch offen (kein Leak
-    -- aus Raum 1, wo D1 geschlossen und pendingClose-relevant war).
-    check(Room.shutters["D1"] ~= nil and Room.shutters["D2"] ~= nil, "rwechsel1: Shutter-Runtime Raum 2")
-    check(Room.shutters["D1"].collisionActive == false, "rwechsel1: Raum-2-D1 offen (kein Leak)")
-    check(Room.shutters["D1"].pendingClose == false, "rwechsel1: kein pendingClose-Leak")
+    -- Kein Shutter-Runtime-Leak aus Raum 1 (Raum 2 hat keine Blenden).
+    check(Room.shutters["D1"] == nil, "rwechsel1: kein Shutter-Leak (Raum 2 ohne Blenden)")
 end
 
 -- --- Integrationstest 10: Raumwechsel-Reset-Semantik 2 -> 3 ---------------
@@ -285,20 +285,28 @@ do
     Room.init()
     Undo.clear()
     Bridge.resetTransit()
+    Baby.resetTransit()
     Room.resetDockAssist()
-    -- Raum-2-Zustand herstellen, der sich klar von Raum 3 unterscheidet.
-    State.setSwitch("S1", "A") -- B1 aktiv, D1 (inner@225) geschlossen
-    State.setSwitch("S2", "A") -- T aktiv, D2 (inner@90) geschlossen
+    -- Raum-2-Zustand herstellen, der sich klar von Raum 3 unterscheidet:
+    -- Baby ins Ziel bringen -> babyLocked-Gate T aktiv (kein Schalter nötig).
+    State.player.ring = "inner"
+    State.player.angle = 292
+    State.baby.ring = "inner"
+    State.baby.angle = 300
+    State.settleBaby()
+    check(State.baby.settled == true, "rwechsel2: Raum-2-Baby eingerastet")
     check(State.elementStates["T"] == true, "rwechsel2: Raum-2-T aktiv")
     Undo.push(State.snapshot())
     check(Undo.count() == 1, "rwechsel2: 1 Undo")
     -- startRoom-Äquivalent: Raum 2 -> Raum 3.
     Bridge.resetTransit()
+    Baby.resetTransit()
     Room.resetDockAssist()
     State.init(Levels[3])
     Undo.clear()
     Room.init()
     check(State.room == Levels[3] and State.room.name == "Der lange Weg", "rwechsel2: State.room = Raum 3")
+    check(State.baby == nil, "rwechsel2: kein Baby-Leak nach Raum 3")
     check(State.player.ring == Levels[3].start.ring and State.player.angle == Levels[3].start.angle, "rwechsel2: Spielerstart = Raum 3")
     check(State.switchStates["S1"] == "B", "rwechsel2: S1 = Raum-3-Definition (B)")
     check(State.elementStates["T"] == false, "rwechsel2: T eingefahren (Raum 3)")

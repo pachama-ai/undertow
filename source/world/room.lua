@@ -193,6 +193,9 @@ function Room.movePlayer(wantedDelta)
 
     -- Snapshot am Frame-Anfang, VOR jeder Bewegung.
     local frameStartSnapshot = state.snapshot()
+    -- Ausgangswinkel des Spielers für den Baby-Push (der Sweep verändert
+    -- state.player.angle schrittweise).
+    local playerStartAngle = state.player.angle
     local undoStored = false
     local direction = wantedDelta > 0 and 1 or -1
     local remaining = math.abs(wantedDelta)
@@ -298,9 +301,66 @@ function Room.movePlayer(wantedDelta)
 
     result.blocked = blocked
     result.switchChanges = switchChanges
-    result.undoStored = undoStored
     result.shutterTransitions = shutterTransitions
+
+    -- Baby-Push (generisch, Raum 2): nach dem Sweep. Bewegt sich der Spieler
+    -- auf demselben Ring auf das Baby zu und erreicht dessen Kontaktabstand,
+    -- wird das Baby um den restlichen Bewegungsanteil in Fahrtrichtung
+    -- geschoben (kein Ziehen, kein Durchspringen, Wraparound). Einrasten im
+    -- Ziel setzt babySettled und aktiviert ein ggf. baby-gesperrtes Gate.
+    -- Ein echter Schub zählt als zustandsändernde Spielerhandlung: Es entsteht
+    -- genau ein Undo-Snapshot (Frame-Anfang), falls nicht bereits ein
+    -- Schalterereignis in diesem Frame einen angelegt hat.
+    local babyMoved, babySettled = Room.applyBabyPush(playerStartAngle, direction, actual)
+    if babyMoved and not undoStored then
+        undo.push(frameStartSnapshot)
+        undoStored = true
+    end
+    result.undoStored = undoStored
+    result.babyMoved = babyMoved
+    result.babySettled = babySettled or false
     return actual * direction, result
+end
+
+-- Bewegt das Baby nach einem Spieler-Sweep (aufgerufen aus movePlayer).
+-- Reine Orchestrierung: die Push-Mathematik liegt in Baby.computePush; die
+-- Mutationen laufen über State (State.setBaby / State.settleBaby), damit Undo
+-- und Restart korrekt funktionieren. Rückgabe: (moved, settled) — moved=true,
+-- wenn das Baby bewegt/eingerastet wurde (dann ist ein Undo-Snapshot fällig);
+-- settled=true, wenn es dabei exakt im Ziel eingerastet ist.
+function Room.applyBabyPush(playerStartAngle, direction, actualDist)
+    local baby = state.baby
+    if not baby or baby.settled then
+        return false, false
+    end
+    -- Nur auf demselben Ring wird geschoben; ein eingerastetes Baby ist
+    -- unverrückbar und für den Spieler passierbar (in seiner Mulde versenkt).
+    if baby.ring ~= state.player.ring then
+        return false, false
+    end
+    if actualDist <= 0 then
+        return false, false
+    end
+    local oldAngle = baby.angle
+    local newAngle, pushAmount, pushDir = Baby.computePush(baby.angle, playerStartAngle, direction, actualDist)
+    if not newAngle then
+        return false, false
+    end
+    state.setBabyPushDirection(pushDir)
+    state.setBaby(baby.ring, newAngle)
+    -- Einrasten ins Ziel: bewegt sich das Baby auf dem Zielring und überstreicht
+    -- den Zielbereich (oder endet darin), wird es exakt im Ziel eingerastet.
+    local settled = false
+    local goal = state.room.baby and state.room.baby.goal
+    if goal and baby.ring == goal.ring then
+        local swept = geo.crossed(oldAngle, pushDir * pushAmount, goal.angle)
+        local inRange = math.abs(geo.delta(newAngle, goal.angle)) <= config.babyGoalRange
+        if swept == pushDir or inRange then
+            state.settleBaby()
+            settled = true
+        end
+    end
+    return true, settled
 end
 
 -- Führt die logische A-Aktion an der aktuellen Spielerposition aus.
@@ -325,6 +385,25 @@ function Room.tryUseConnection()
     local result = { used = false, kind = nil, id = nil, roomComplete = false, crossing = false }
     local playerRing = state.player.ring
     local playerAngle = state.player.angle
+
+    -- Gemeinsamer Brückentransit (Baby korrekt an der aktiven Brücke, Player
+    -- direkt dahinter, gleicher Ring): EIN A bewegt beide gemeinsam über die
+    -- Brücke. Reine Query über Baby.canTransfer (read-only); es gibt keinen
+    -- separaten Baby-Solotransfer mehr (der Player-Solo bleibt möglich, wenn
+    -- das Baby nicht am Dock steht).
+    for _, b in ipairs(state.room.bridges) do
+        if Baby.canTransfer(b, playerRing, playerAngle) then
+            local started = Bridge.beginSharedTransit(b, playerRing)
+            if started then
+                result.used = true
+                result.kind = "sharedBridge"
+                result.id = b.id
+                result.roomComplete = false
+                result.crossing = true
+                return result
+            end
+        end
+    end
 
     -- Alle nutzbaren Kandidaten in deterministischer Reihenfolge sammeln.
     local candidates = {}

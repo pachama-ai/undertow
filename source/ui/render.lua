@@ -73,6 +73,40 @@ function Render.pickBlinkInterval()
     return minI + (r() * span)
 end
 
+-- --- Baby-Visualzustand (generisch, Raum 2, rein visuell) ------------------
+-- Eigener Blink-Timer, Idle-Zeit und Reaktions-Framezähler (Push/Settle/
+-- Landing) des Babys. KEIN Gameplay-State (nie in State.snapshot/Save/Levels);
+-- wird bei Raumstart, Undo und Raumwechsel über resetBabyVisual neutralisiert.
+Render.babyVisual = nil
+-- Injizierbarer Zufallsgenerator [0,1) für das Baby-Blinkintervall.
+Render.babyBlinkRandom = nil
+
+-- Wählt das nächste Baby-Blinkintervall in [babyBlinkMinInterval,
+-- babyBlinkMaxInterval]. Nach jedem abgeschlossenen Blink wird NEU gewürfelt.
+function Render.pickBabyBlinkInterval()
+    local minI = config.babyBlinkMinInterval
+    local span = config.babyBlinkMaxInterval - config.babyBlinkMinInterval
+    local r = Render.babyBlinkRandom
+    if not r then
+        r = math.random
+    end
+    return minI + (r() * span)
+end
+
+-- Setzt den rein visuellen Baby-Zustand auf Neutral (Raumstart, Undo,
+-- Raumwechsel). Kein Gameplay-Effekt.
+function Render.resetBabyVisual()
+    Render.babyVisual = {
+        idleTime = 0,
+        nextBlinkAt = Render.pickBabyBlinkInterval(),
+        blinkFramesRemaining = 0,
+        pushFramesRemaining = 0,
+        pushDir = 1,
+        settleFramesRemaining = 0,
+        landingFramesRemaining = 0,
+    }
+end
+
 -- Setzt den rein visuellen Spielerzustand auf Neutral (Raumstart, Undo,
 -- Raumabschluss). Kein Gameplay-Effekt.
 function Render.resetPlayerVisual()
@@ -83,10 +117,17 @@ function Render.resetPlayerVisual()
         blinkFramesRemaining = 0,
         switchWidenFramesRemaining = 0,
         shutterSquintFramesRemaining = 0,
+        pushFramesRemaining = 0,             -- minimaler Druck beim Baby-Push
         wasBlockedLastFrame = false,         -- Flankenerkennung Shutter-Kollision
     }
     -- Press-Animation der Schalter: keine Restzähler in neue Räume tragen.
     Render.switchPressFrames = 0
+    -- Crank-Onboarding-Hinweis („Kurbel ausklappen / D-Pad“): pro Raum nur
+    -- kurz sichtbar, danach räumt er die Spielfläche.
+    Render.crankHintTime = config.crankHintDuration
+    -- Baby-Visualzustand (Blink/Idle/Push/Settle/Landing) für Raumstart, Undo,
+    -- Restart und Raumwechsel neutralisieren. Rein visuell.
+    Render.resetBabyVisual()
     Render.resetObjectAnims()
 end
 
@@ -188,6 +229,14 @@ function Render.update(dt, roomComplete)
     if Render.switchPressFrames > 0 then
         Render.switchPressFrames = Render.switchPressFrames - 1
     end
+    -- Player-Push-Kompression (Baby-Kontakt): kurzer Frame-Zähler.
+    if Render.playerVisual and Render.playerVisual.pushFramesRemaining > 0 then
+        Render.playerVisual.pushFramesRemaining = Render.playerVisual.pushFramesRemaining - 1
+    end
+    -- Crank-Onboarding-Hinweis: Restzeit abbauen (räumt die Spielfläche).
+    if Render.crankHintTime ~= nil and Render.crankHintTime > 0 then
+        Render.crankHintTime = Render.crankHintTime - dt
+    end
     local pv = Render.playerVisual
 
     -- Blink-Abschluss erkennen (Zähler lief auf 0): neuen Termin planen.
@@ -219,6 +268,45 @@ function Render.update(dt, roomComplete)
 
     -- Objekt-Mikroanimationen + Raumabschluss-Impuls fortschreiben.
     Render.updateObjectAnimations(dt)
+    -- Baby-Lebendigkeit (Blink/Idle/Reaktionen) fortschreiben.
+    Render.updateBabyVisual(dt)
+end
+
+-- Baby-Lebendigkeit (rein visuell): eigener Blink-Timer, Idle-Zeit und Abbau
+-- der Reaktions-Framezähler (Push/Settle/Landing). Blink nur in ruhiger Szene
+-- (kein Transit, keine höher priorisierte Reaktion). Deterministisch seedbar
+-- über Render.babyBlinkRandom.
+function Render.updateBabyVisual(dt)
+    local bv = Render.babyVisual
+    if not bv then
+        return
+    end
+    -- Reaktions-Framezähler abbauen.
+    if bv.pushFramesRemaining > 0 then bv.pushFramesRemaining = bv.pushFramesRemaining - 1 end
+    if bv.settleFramesRemaining > 0 then bv.settleFramesRemaining = bv.settleFramesRemaining - 1 end
+    if bv.landingFramesRemaining > 0 then bv.landingFramesRemaining = bv.landingFramesRemaining - 1 end
+    -- Blink-Abschluss erkennen: neuen Termin planen.
+    local wasBlinking = bv.blinkFramesRemaining > 0
+    if bv.blinkFramesRemaining > 0 then bv.blinkFramesRemaining = bv.blinkFramesRemaining - 1 end
+    local nowBlinking = bv.blinkFramesRemaining > 0
+    if wasBlinking and not nowBlinking then
+        bv.nextBlinkAt = bv.idleTime + Render.pickBabyBlinkInterval()
+    end
+    -- Idle-Zeit nur in ruhiger Szene (kein Transit, keine höher priorisierte
+    -- Reaktion); dann auch den nächsten Blink planen.
+    local busy = bv.pushFramesRemaining > 0 or bv.settleFramesRemaining > 0
+        or bv.landingFramesRemaining > 0 or Baby.isCrossing()
+    if not busy then
+        if not nowBlinking then
+            bv.idleTime = bv.idleTime + dt
+            if bv.nextBlinkAt <= 0 then
+                bv.nextBlinkAt = Render.pickBabyBlinkInterval()
+            end
+            if bv.idleTime >= bv.nextBlinkAt then
+                bv.blinkFramesRemaining = config.babyBlinkFrames
+            end
+        end
+    end
 end
 
 -- Erkennt Zustandswechsel der Elemente und treibt die transiente Animations-
@@ -308,6 +396,10 @@ function Render.notePlayerMovement(actualDelta)
         pv.idleTime = 0
         pv.nextBlinkAt = Render.pickBlinkInterval()
         pv.blinkFramesRemaining = 0
+        -- Baby-Idle: Bewegung des Players beendet die gemeinsame Ruhephase.
+        if Render.babyVisual then
+            Render.babyVisual.idleTime = 0
+        end
     end
 end
 
@@ -328,6 +420,82 @@ function Render.noteSwitchContact()
         -- bei switchChanges>0): 2-Frame-Zähler für die eingedrückte Darstellung.
         Render.switchPressFrames = config.switchPressFrames
     end
+end
+
+-- Baby-Push (generisch, Raum 2): kurze 1-px-Kompression in Fahrtrichtung +
+-- leichtes Augenweiten beim echten Schieben (Room.movePlayer -> result.babyMoved).
+-- direction: tatsächliche Bewegungsrichtung (+1 CW, -1 CCW). Unterbricht
+-- Blink/Idle. Rein visuell, kein Gameplay-Effekt.
+function Render.noteBabyPush(direction)
+    local bv = Render.babyVisual
+    if not bv then
+        return
+    end
+    bv.pushFramesRemaining = config.babyPushFrames
+    bv.pushDir = (direction and direction >= 0) and 1 or -1
+    bv.blinkFramesRemaining = 0
+    bv.idleTime = 0
+    bv.nextBlinkAt = Render.pickBabyBlinkInterval()
+end
+
+-- Player-Push-Kontakt (generisch, Raum 2): beim echten Schieben des Babys
+-- zeigt der Player minimal Druck (1 px radiale Kompression) und behält einen
+-- kurzen fokussierten Blick. Rein visuell, kein Gameplay-Effekt.
+function Render.notePlayerPushContact()
+    local pv = Render.playerVisual
+    if not pv then
+        return
+    end
+    pv.pushFramesRemaining = config.babyPushFrames
+end
+
+-- Baby-Ziel-Einrasten (generisch, Raum 2): kurze Kompression + Augenweiten,
+-- danach ruhiger lebendiger Endzustand. Rein visuell, kein Gameplay-Effekt.
+function Render.noteBabySettled()
+    local bv = Render.babyVisual
+    if not bv then
+        return
+    end
+    bv.settleFramesRemaining = config.babySettleFrames
+    bv.blinkFramesRemaining = 0
+    bv.pushFramesRemaining = 0
+    bv.idleTime = 0
+    bv.nextBlinkAt = Render.pickBabyBlinkInterval()
+end
+
+-- Baby-Landing nach dem Brückentransit (generisch, Raum 2): kleiner
+-- Settling-Impuls, damit die Ankunft auf dem anderen Ring sichtbar ist.
+function Render.noteBabyLanding()
+    local bv = Render.babyVisual
+    if not bv then
+        return
+    end
+    bv.landingFramesRemaining = config.babyLandingFrames
+    bv.blinkFramesRemaining = 0
+    bv.pushFramesRemaining = 0
+    bv.idleTime = 0
+    bv.nextBlinkAt = Render.pickBabyBlinkInterval()
+end
+
+-- Aktuelle Baby-Reaktion nach Priorität (rein visuell):
+--   transit > settle > landing > bridge-ready > push > blink > normal.
+-- Hängt von Render.babyVisual und der read-only Transfer-Bereitschaft ab.
+-- Höher priorisierte Reaktionen pausieren/überschreiben niedrigere.
+function Render.babyEyeState()
+    local bv = Render.babyVisual or {}
+    if Render.babyIsTransiting() then return "transit" end
+    if bv.settleFramesRemaining and bv.settleFramesRemaining > 0 then return "settle" end
+    if bv.landingFramesRemaining and bv.landingFramesRemaining > 0 then return "landing" end
+    if Render.babyBridgeReady() then return "bridge" end
+    if bv.pushFramesRemaining and bv.pushFramesRemaining > 0 then return "push" end
+    if bv.blinkFramesRemaining and bv.blinkFramesRemaining > 0 then return "blink" end
+    return "normal"
+end
+
+-- Read-only: ist gerade ein Baby-Brückentransfer bereit (Baby am aktiven
+-- Bridge-Dock, Player dahinter)? Reine UI-Query, kein Gameplay-Effekt.
+function Render.babyBridgeReady()
+    return Baby.findTransferReadyBridge() ~= nil
 end
 
 -- Raumabschluss-Systemimpuls (Atmosphäre): setzt einen kurzen Timer, während
@@ -384,6 +552,8 @@ function Render.noteUndo()
     pv.idleTime = 0
     pv.nextBlinkAt = Render.pickBlinkInterval()
     Render.resetObjectAnims()
+    -- Baby-Visualzustand sauber zurücksetzen (keine hängende Reaktion nach Undo).
+    Render.resetBabyVisual()
 end
 
 -- Aktuelle Augenreaktion nach Priorität: Squint > Widen > Blink > normal.
@@ -415,11 +585,90 @@ end
 -- Gleiche Berechnung wie drawPlayer: normaler Ring -> Render.playerRadius() +
 -- State.player.angle; bei Bridge-Transit -> Transit-Winkel (Körper wandert
 -- radial). Damit liegt der Restart-Ring exakt um die sichtbare Figur.
+-- Während eines gemeinsamen Transits gleitet der Player in der Baby-Lead-
+-- Phase von seiner Startposition auf die Brückenachse (das Baby wartet am
+-- Dock und startet voraus). Während der Hold-Phase bleibt er an seiner
+-- Kontaktposition hinter dem Baby. Danach exakt auf der Achse. nil außerhalb
+-- des gemeinsamen Transits.
+function Render.sharedPlayerAngle()
+    local bt = Bridge.getTransit()
+    if not (bt and bt.active and bt.shared and bt.playerStartAngle) then
+        return nil
+    end
+    local lead = bt.babyLead or 0
+    if lead <= 0 then
+        return bt.angle
+    end
+    local elapsed = (bt.elapsed or 0) - (bt.hold or 0)
+    local p = math.min(1, math.max(0, elapsed / lead))
+    local d = geo.delta(bt.playerStartAngle, bt.angle)
+    return geo.norm(bt.playerStartAngle + d * p)
+end
+
 function Render.playerScreenPosition()
     local radius = Render.playerRadius()
     local angle = state.player.angle
-    if Bridge.isCrossing() then
+    local sharedAngle = Render.sharedPlayerAngle()
+    if sharedAngle then
+        angle = sharedAngle
+    elseif Bridge.isCrossing() then
         angle = Bridge.getTransit().angle
+    end
+    local x, y = geo.polar(config.centerX, config.centerY, radius, angle)
+    return x, y, angle
+end
+
+-- Baby-Transit-Fortschritt (0..1) während eines Transits (gemeinsam oder
+-- Baby-solo), sonst nil. Read-only für das Rendering.
+function Render.babyTransitProgress()
+    local bt = Bridge.getTransit()
+    if bt and bt.active and bt.shared then
+        return Bridge.getBabyTransitProgress()
+    end
+    if Baby.isCrossing() then
+        return Baby.getTransitProgress()
+    end
+    return nil
+end
+
+-- Befindet sich das Baby gerade in einem Brückentransit (gemeinsam oder solo)?
+function Render.babyIsTransiting()
+    return Render.babyTransitProgress() ~= nil
+end
+
+-- Bildschirmradius des Babys (generisch, Raum 2): während eines Transits
+-- (gemeinsam oder solo) radial interpoliert, sonst Camera-Radius des
+-- Babyrings. nil, wenn der Raum kein Baby hat.
+function Render.babyRadius()
+    local bt = Bridge.getTransit()
+    if bt and bt.active and bt.shared then
+        local progress = Bridge.getBabyTransitProgress() or 0
+        return Render.transitRadius(progress, bt.fromRing, bt.toRing)
+    end
+    if Baby.isCrossing() then
+        local t = Baby.getTransit()
+        local progress = Baby.getTransitProgress() or 0
+        return Render.transitRadius(progress, t.fromRing, t.toRing)
+    end
+    if state.baby then
+        return Render.ringRadius(state.baby.ring)
+    end
+    return nil
+end
+
+-- Bildschirmposition des Babys (Mittelpunkt). nil, wenn kein Baby vorhanden.
+-- Während eines gemeinsamen Transits auf der Brückenachse (Player-Follow).
+function Render.babyScreenPosition()
+    local radius = Render.babyRadius()
+    if not radius then
+        return nil
+    end
+    local angle = state.baby.angle
+    local bt = Bridge.getTransit()
+    if bt and bt.active and bt.shared then
+        angle = bt.angle
+    elseif Baby.isCrossing() then
+        angle = Baby.getTransit().angle
     end
     local x, y = geo.polar(config.centerX, config.centerY, radius, angle)
     return x, y, angle
@@ -442,10 +691,24 @@ end
 function Render.playerEyePosition()
     local radius = Render.playerRadius()
     local angle = state.player.angle
-    if Bridge.isCrossing() then
+    local sharedAngle = Render.sharedPlayerAngle()
+    if sharedAngle then
+        angle = sharedAngle
+    elseif Bridge.isCrossing() then
         angle = Bridge.getTransit().angle
     end
     local x, y = geo.polar(config.centerX, config.centerY, radius, angle)
+    -- Gemeinsamer Brückentransit / Bridge-Ready: der Player blickt zur Brücke
+    -- (radial zum anderen Ring) — als Paar mit dem Baby. Rein visuell.
+    local bt = Bridge.getTransit()
+    if (bt and bt.active and bt.shared)
+        or (not Bridge.isCrossing() and Baby.findTransferReadyBridge() ~= nil) then
+        local dx, dy = config.centerX - x, config.centerY - y
+        local len = math.sqrt(dx * dx + dy * dy)
+        if len > 0.01 then
+            return x + dx / len * config.pupilTravel, y + dy / len * config.pupilTravel
+        end
+    end
     local rad = math.rad(angle)
     -- Pupillen-Versatz folgt der Facing-Richtung (bzw. Motion-Lag, falls
     -- geladen) und skaliert auf max pupilTravel. Max-Auslenkung = pupilTravel.
@@ -468,6 +731,35 @@ function Render.playerEyePosition()
         end
     end
     return px, py
+end
+
+-- Baby-Augenposition: subtile Pupillenrichtung. Bridge-Ready -> radial zur
+-- Brücke/anderen Ring (kein Text, die Welt erklärt die Aktion). Sonst kleine
+-- Basis-Awareness Richtung Player (kein hektisches Tracking) + nach längerem
+-- Stillstand stärkerer, langsamer Idle-Blick. Rein visuell, kein Gameplay.
+function Render.babyEyePosition(reaction, x, y)
+    if reaction == "bridge" or reaction == "transit" then
+        local dx, dy = config.centerX - x, config.centerY - y
+        local len = math.sqrt(dx * dx + dy * dy)
+        if len > 0.01 then
+            return x + dx / len * config.babyLookTravel, y + dy / len * config.babyLookTravel
+        end
+        return x, y
+    end
+    local px, py = Render.playerScreenPosition()
+    local dx, dy = px - x, py - y
+    local len = math.sqrt(dx * dx + dy * dy)
+    if len < 0.01 then
+        return x, y
+    end
+    local bv = Render.babyVisual or {}
+    local idle = bv.idleTime or 0
+    local g = 0
+    if idle > config.idleGazeDelay then
+        g = math.max(0, math.sin((idle - config.idleGazeDelay) / config.idleGazeCycle * math.pi))
+    end
+    local travel = config.babyLookBase + (config.babyLookTravel - config.babyLookBase) * g
+    return x + dx / len * travel, y + dy / len * travel
 end
 
 -- Ghost-Ringnummern (reine Berechnung): äußere World-Ringnummern der
@@ -708,7 +1000,9 @@ end
 -- 6) Brücke: aktiv = durchgehender 6-px-Balken; eingefahren = zwei 5-px-Stummel.
 -- previewOn: 1-px-Halo je Seite (8-px-Unterbalken). Bei inaktiver Brücke wird
 -- die Lücke NICHT geschlossen (beide Stummel separat hervorgehoben).
-local function drawBridge(b, previewOn)
+-- transferReady: an genau dieser Brücke ist ein Baby-Transfer bereit -> kleiner
+-- pulsierender Dock-Punkt am Mittelpunkt (weltbasierter Hinweis, kein Text).
+local function drawBridge(b, previewOn, transferReady)
     local outerR = Render.ringRadius("outer")
     local innerR = Render.ringRadius("inner")
     local x1, y1 = geo.polar(config.centerX, config.centerY, outerR, b.angle)
@@ -753,6 +1047,16 @@ local function drawBridge(b, previewOn)
         gfx.setLineWidth(config.bridgeWidth)
         gfx.drawLine(x1, y1, a1x, a1y)
         gfx.drawLine(x2, y2, a2x, a2y)
+    end
+    -- Subtiler Dock-Puls (Baby-Ready): kleiner SCHWARZER Punkt am Brücken-
+    -- Mittelpunkt pulsiert langsam, wenn genau an dieser Brücke ein Baby-
+    -- Transfer bereit ist (auf der weißen Brücke in 1-Bit sichtbar).
+    if transferReady then
+        local mx, my = geo.polar(config.centerX, config.centerY, (outerR + innerR) / 2, b.angle)
+        local on = (Render.visualTime % config.babyReadyPulsePeriod) < (config.babyReadyPulsePeriod / 2)
+        gfx.setColor(BLACK)
+        gfx.fillCircleAtPoint(mx, my, on and 2 or 1)
+        gfx.setColor(WHITE)
     end
     gfx.setLineWidth(1)
 end
@@ -963,6 +1267,14 @@ local function drawPlayer()
         fillOval(x, y, angle, rHalo - comp, rHalo, WHITE)
         fillOval(x, y, angle, rContour - comp, rContour, BLACK)
         fillOval(x, y, angle, rBall - comp, rBall, WHITE)
+    elseif Render.playerVisual.pushFramesRemaining > 0 then
+        -- Minimaler Druck beim Baby-Push (Beziehung): 1 px radiale Kompression,
+        -- der Blick bleibt fokussiert nach vorn (Richtung Baby). Nicht stärker
+        -- als die Babyreaktion.
+        local comp = 1
+        fillOval(x, y, angle, rHalo - comp, rHalo, WHITE)
+        fillOval(x, y, angle, rContour - comp, rContour, BLACK)
+        fillOval(x, y, angle, rBall - comp, rBall, WHITE)
     else
         gfx.setColor(WHITE)
         gfx.fillCircleAtPoint(x, y, rHalo)
@@ -1000,6 +1312,136 @@ local function drawPlayer()
     gfx.setColor(WHITE)
 end
 
+-- Baby-Ziel (generisch, Raum 2): kleine Andockmulde auf der Zielbahn.
+-- Leer = schmalerer schwarzer Bogen (Vertiefung) mit zwei weißen Randmarken
+-- (○-artige Mulde); besetzt = das Baby sitzt sichtbar darin (Zeichenreihenfolge:
+-- Mulde vor dem Baby). Kein Text, kein Symbol.
+local function drawBabyGoal()
+    local babyDef = state.room.baby
+    if not babyDef then
+        return
+    end
+    local radius = Render.ringRadius(babyDef.goal.ring)
+    local ang = babyDef.goal.angle
+    local arc = config.babyGoalArcDeg
+    local sA = geo.norm(ang - arc / 2)
+    local eA = geo.norm(ang + arc / 2)
+    -- Vertiefung in der weißen Bahn: schmalerer schwarzer Bogen, die Bahn bleibt
+    -- an den Rändern sichtbar -> dezent als Ruheplatz lesbar, nicht als Blende.
+    gfx.setColor(BLACK)
+    gfx.setLineWidth(config.trackWidth - 4)
+    gfx.drawArc(config.centerX, config.centerY, radius, sA, eA)
+    gfx.setLineWidth(1)
+    -- Bewusst unauffällig: KEINE weißen Dock-Brackets (die „○ -> fertig“-Metapher
+    -- wird nicht weiter betont; Spieler und Baby reisen als Paar weiter).
+    gfx.setColor(WHITE)
+end
+
+-- Baby (generisch, Raum 2): kleine Kugel derselben Art wie der Spieler
+-- (~62 % des Player-Durchmessers), 1-px-Kontur, schwacher Halo, kleines Auge.
+-- Reaktionspriorität (rein visuell): Bridge-Transit > Goal-Settle > Landing >
+-- Bridge-Ready > Push > Blink > Idle. Beim Brückentransit radial interpoliert,
+-- beim Push tangential komprimiert (mit kurzer Rückfederung), am bereiten
+-- Bridge-Dock radial zur Brücke gezogen und leicht pulsierend (weltbasierter
+-- "A"-Hinweis, kein Text). Kein autonomes Laufen, keine KI.
+local function drawBaby(transferBridge)
+    local baby = state.baby
+    if not baby then
+        return
+    end
+    local radius = Render.babyRadius()
+    if not radius then
+        return
+    end
+    local transit = Render.babyIsTransiting()
+    local angle = baby.angle
+    local sharedBt = Bridge.getTransit()
+    if transit then
+        if sharedBt and sharedBt.shared then
+            angle = sharedBt.angle
+        else
+            angle = Baby.getTransit().angle
+        end
+    end
+
+    -- Visueller Bridge-Dock-Snap: bei bereitem Transfer sitzt das Baby exakt
+    -- an der Brückenachse (rein visuell, kein Gameplay-Snap/keine Bewegung).
+    if transferBridge and not transit then
+        angle = transferBridge.angle
+    end
+
+    local x, y = geo.polar(config.centerX, config.centerY, radius, angle)
+    local bv = Render.babyVisual or {}
+    local reaction = Render.babyEyeState()
+
+    -- Körperparameter (rLong radial, rShort tangential).
+    local rLong = config.babyRadius
+    local rShort = config.babyRadius
+    local radialPull = 0
+    if reaction == "settle" or reaction == "landing" then
+        -- kleine Kompression beim Einrasten/Landen
+        rLong = rLong - 1
+        rShort = rShort - 1
+    elseif reaction == "push" then
+        -- Kompression in Schieberichtung (tangential); letzter Frame = Rückfederung
+        local squash = 1
+        if bv.pushFramesRemaining == 1 then
+            squash = -0.5
+        end
+        rShort = rShort - squash
+    elseif reaction == "bridge" then
+        -- minimaler Körperzug zur Brücke + subtiler Puls
+        radialPull = config.babyReadyPull
+        local pulse = config.babyReadyPulse * (0.5 + 0.5 * math.sin(Render.visualTime * (2 * math.pi / config.babyReadyPulsePeriod)))
+        rLong = rLong + pulse
+        rShort = rShort + pulse
+    end
+    -- Transit: leichte radiale Streckung während der Überquerung (gemeinsam
+    -- oder solo; eine gemeinsame Progress-Wahrheit).
+    if transit then
+        local p = Render.babyTransitProgress() or 0
+        local stretch = math.sin(math.pi * p) * 1.5
+        rLong = rLong + stretch
+        rShort = rShort - stretch * 0.4
+    end
+
+    -- Bridge-Ready: Körper 1 px radial zur Brücke ziehen.
+    if radialPull ~= 0 then
+        x, y = geo.polar(config.centerX, config.centerY, radius - radialPull, angle)
+    end
+
+    -- Konzentrische Ellipsen (Halo, Kontur, Körper); fillOval hält die
+    -- Kompression/Streckung in 1-Bit sauber lesbar.
+    local stroke = config.babyStroke
+    local halo = config.babyHalo
+    local function layer(rl, rs, color)
+        fillOval(x, y, angle, rl, rs, color)
+    end
+    layer(rLong + stroke + halo, rShort + stroke + halo, WHITE)
+    layer(rLong + stroke, rShort + stroke, BLACK)
+    layer(rLong, rShort, WHITE)
+
+    -- Auge: Blink = kurze tangentiale Lidlinie (Player-Konvention); sonst
+    -- Pupille, bei Push/Settle/Landing/Transit kurz weiter.
+    local ex, ey = Render.babyEyePosition(reaction, x, y)
+    if reaction == "blink" then
+        local rad = math.rad(angle)
+        local tx, ty = math.cos(rad), math.sin(rad)
+        gfx.setColor(BLACK)
+        gfx.setLineWidth(1)
+        gfx.drawLine(ex - tx * 1.5, ey - ty * 1.5, ex + tx * 1.5, ey + ty * 1.5)
+        gfx.setLineWidth(1)
+    else
+        local pr = config.babyPupilRadius
+        if reaction == "push" or reaction == "settle" or reaction == "landing" or reaction == "transit" then
+            pr = pr + 0.5
+        end
+        gfx.setColor(BLACK)
+        gfx.fillCircleAtPoint(ex, ey, pr)
+    end
+    gfx.setColor(WHITE)
+end
+
 -- 11) B-Hold-Fortschrittsring (Phase 10.4): weißer 1-px-Bogen um die sichtbare
 --     Spielerfigur, Start bei 12 Uhr, im Uhrzeigersinn 0°->360° (Spiel-Winkel-
 --     konvention, entspricht drawArc). progress=0 -> nichts, 0.5 -> halber
@@ -1025,7 +1467,8 @@ end
 --     Kein Fade, keine Pulsation, kein Sound.
 local function drawCrankOverlay(roomComplete)
     local docked = playdate.isCrankDocked()
-    if not docked or roomComplete then
+    local hintT = Render.crankHintTime or 0
+    if not docked or roomComplete or hintT <= 0 then
         return
     end
     local bx = config.crankOverlayX
@@ -1078,6 +1521,9 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     local function previewOf(id)
         return blinkOn and previewSet[id] == true
     end
+    -- Baby-Transfer-Bereitschaft (rein visuell, read-only): genau das Bridge-
+    -- Dock, an dem gerade ein Baby-Transfer möglich wäre (oder nil).
+    local transferBridge = Baby.findTransferReadyBridge()
 
     -- 1) Hintergrund schwarz
     gfx.clear(gfx.kColorBlack)
@@ -1088,6 +1534,9 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     -- 4) Bahnen (weiß, 8 px, beide sichtbare Ringe)
     drawTrack(Render.ringRadius("outer"))
     drawTrack(Render.ringRadius("inner"))
+    -- 4b) Baby-Ziel-Mulde (generisch, Raum 2): auf der Zielbahn, unter den
+    --     Brücken/Gate, damit sie nie von ausgefahrenen Balken verdeckt wird.
+    drawBabyGoal()
     -- 5) Blenden (Preview-Halo unmittelbar vor dem jeweiligen Element)
     for _, sh in ipairs(state.room.shutters) do
         drawShutter(sh, previewOf(sh.id))
@@ -1095,12 +1544,12 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     -- 6) Brücken (inaktiv zuerst, dann aktiv)
     for _, b in ipairs(state.room.bridges) do
         if Render.bridgeVisualState(b.id) == "inactive" then
-            drawBridge(b, previewOf(b.id))
+            drawBridge(b, previewOf(b.id), (transferBridge ~= nil and transferBridge.id == b.id) or false)
         end
     end
     for _, b in ipairs(state.room.bridges) do
         if Render.bridgeVisualState(b.id) == "active" then
-            drawBridge(b, previewOf(b.id))
+            drawBridge(b, previewOf(b.id), (transferBridge ~= nil and transferBridge.id == b.id) or false)
         end
     end
     -- 7) Kernbrücke / Gate (kein Gate -> previewOf(nil) ist false)
@@ -1113,6 +1562,9 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     drawElementMarks()
     -- 9b) Raumabschluss-Impuls (Atmosphäre): über den Bahnen, unter dem Spieler.
     drawCompletionPulse(currentRoomIndex)
+    -- 9c) Baby (generisch, Raum 2): vor dem Spieler, damit der Spieler visuell
+    --     wichtiger bleibt und das Baby in seiner Mulde sichtbar ist.
+    drawBaby(transferBridge)
     -- 10) Spieler (bleibt ganz oben)
     drawPlayer()
     -- 11) B-Hold-Restart-Fortschrittsring (direkt um die Figur, 1-px-Bogen von

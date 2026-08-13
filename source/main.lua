@@ -34,6 +34,7 @@ import "core/bgesture"
 import "world/switch"
 import "world/bridge"
 import "world/gate"
+import "world/baby"
 import "world/player"
 -- World-Koordinator
 import "world/room"
@@ -53,6 +54,7 @@ local save <const> = Save
 local sysmenu <const> = Sysmenu
 local bgesture <const> = BGesture
 local player <const> = Player
+local baby <const> = Baby
 local room <const> = Room
 local levels <const> = Levels
 local render <const> = Render
@@ -160,9 +162,10 @@ local function startRoom(index)
     if not roomData then
         error("main.startRoom: Raum " .. tostring(index) .. " existiert nicht")
     end
-    -- Ein alter Brückentransit oder eine alte Andockhilfe darf nie in einen
-    -- neuen Raum weiterlaufen.
+    -- Ein alter Brückentransit, Baby-Transit oder eine alte Andockhilfe darf
+    -- nie in einen neuen Raum weiterlaufen.
     bridge.resetTransit()
+    baby.resetTransit()
     room.resetDockAssist()
     state.init(roomData)
     undo.clear()
@@ -385,16 +388,35 @@ local function updateRoom()
     -- Brückentransit: während der radialen Überquerung wird keine
     -- Gameplay-Eingabe angenommen (Kurbel, D-Pad, A, B/Undo). Eine laufende
     -- Andockhilfe wird dabei verworfen. Das Rendering läuft im Frame weiter
-    -- (drawScene ist davon unabhängig).
+    -- (drawScene ist davon abhängig). Ein gemeinsamer Player+Baby-Transit
+    -- löst beim Abschluss einen Landing-Impuls aus (rein visuell).
     if bridge.isCrossing() then
         room.resetDockAssist()
-        local completed = bridge.update(FRAME_DT)
+        local completed, wasShared = bridge.update(FRAME_DT)
         if completed then
             -- Ringwechsel: alle Traversierungen des alten Rings sind gegenstandslos
             -- (Release-Fix 1) — keine halbe Schalterdurchquerung über die Ring-
             -- grenze hinweg.
             room.resetSwitchTraversal()
             room.syncPhysicalShutters()
+            if wasShared then
+                render.noteBabyLanding()
+            end
+        end
+        render.noteShutterBlocked(false)
+        audio.noteShutterBlocked(false)
+        return
+    end
+
+    -- Baby-Brückentransit (generisch, Raum 2): wie beim Spielertransit wird
+    -- während der kurzen radialen Bewegung keine Gameplay-Eingabe angenommen
+    -- (Kurbel, D-Pad, A, B/Undo). Das Rendering läuft im Frame weiter. Beim
+    -- Abschluss startet ein kleiner Landing-Impuls (rein visuell).
+    if baby.isCrossing() then
+        room.resetDockAssist()
+        local completed = baby.update(FRAME_DT)
+        if completed then
+            render.noteBabyLanding()
         end
         render.noteShutterBlocked(false)
         audio.noteShutterBlocked(false)
@@ -468,6 +490,17 @@ local function updateRoom()
         -- Pass 2: Blenden-Körperton beim tatsächlichen Öffnen/Schließen
         -- (Schließen tiefer/härter, Öffnen etwas höher und leiser).
         audio.noteShutterTransitions(moveResult.shutterTransitions)
+        -- Baby-Reaktionen (generisch, Raum 2, rein visuell): beim echten
+        -- Schieben leichte Kompression in Fahrtrichtung + Augenweiten (Baby)
+        -- und minimaler Druck + fokussierter Blick (Player); beim Einrasten ins
+        -- Ziel ein kurzer Settling-Impuls. Kein Gameplay-Effekt.
+        if moveResult.babyMoved then
+            render.noteBabyPush(actualDelta)
+            render.notePlayerPushContact()
+        end
+        if moveResult.babySettled then
+            render.noteBabySettled()
+        end
     else
         room.updateDockAssist()
         -- Kein Bewegungsversuch in diesem Frame: keine Kollision.
@@ -528,7 +561,13 @@ menu.init()
 -- Systemmenu-Zugriff initialisieren (eigene Einträge leeren); die zwei
 -- Gameplay-Einträge werden erst beim Spielstart registriert.
 sysmenu.init()
-showMainMenu()
+-- TEMPORÄR (Test): direkt in Raum 2 starten statt Startmenü anzuzeigen.
+-- Entfernen, um zum normalen Menüstart zurückzukehren.
+startRoom(2)
+camera.init(state.room.rings.outer)
+appMode = "game"
+installGameplaySystemMenu()
+-- showMainMenu()
 
 function playdate.update()
     playdate.timer.updateTimers()

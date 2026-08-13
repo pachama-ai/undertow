@@ -24,6 +24,11 @@ State.player = {
     angle = 0,
 }
 
+-- Baby-Runtime-Zustand (generisch, Raum 2): nil, wenn der Raum kein Baby hat.
+-- { ring, angle, settled, lastPushDirection }.
+-- settled = Baby ist im Ziel eingerastet und nicht mehr verschiebbar.
+State.baby = nil
+
 -- Initialisiert einen komplett frischen Raumzustand.
 -- roomData wird nur referenziert, niemals verändert. Ein zweiter Aufruf
 -- übernimmt keinerlei Zustände des vorherigen Raums.
@@ -37,6 +42,16 @@ function State.init(roomData)
         ring = roomData.start.ring,
         angle = roomData.start.angle,
     }
+    if roomData.baby then
+        State.baby = {
+            ring = roomData.baby.start.ring,
+            angle = roomData.baby.start.angle,
+            settled = false,
+            lastPushDirection = 1, -- CW-Standard (wie Player-Facing)
+        }
+    else
+        State.baby = nil
+    end
     State.deriveElements()
 end
 
@@ -53,6 +68,12 @@ function State.deriveElements()
     end
     if State.room.gate and State.room.gate.free == true then
         State.elementStates[State.room.gate.id] = true
+    end
+
+    -- Baby-gesperrtes Gate (generisch): aktiv erst, wenn das Baby im Ziel sitzt.
+    -- Ermöglicht datengetrieben "Gate aktiv <=> Baby im Ziel" ohne Raum-Sonderlogik.
+    if State.room.gate and State.room.gate.babyLocked == true then
+        State.elementStates[State.room.gate.id] = (State.baby ~= nil and State.baby.settled == true)
     end
 
     -- Blenden sowie gesteuerte Brücken/Gate aus dem steuernden Schalter ableiten.
@@ -127,6 +148,14 @@ function State.snapshot()
         ring = State.player.ring,
         angle = State.player.angle,
     }
+    if State.baby then
+        snap.baby = {
+            ring = State.baby.ring,
+            angle = State.baby.angle,
+            settled = State.baby.settled,
+            lastPushDirection = State.baby.lastPushDirection,
+        }
+    end
     return snap
 end
 
@@ -143,6 +172,57 @@ function State.restore(snapshot)
         ring = snapshot.player.ring,
         angle = snapshot.player.angle,
     }
+    if snapshot.baby then
+        State.baby = {
+            ring = snapshot.baby.ring,
+            angle = snapshot.baby.angle,
+            settled = snapshot.baby.settled,
+            lastPushDirection = snapshot.baby.lastPushDirection,
+        }
+    else
+        State.baby = nil
+    end
+    State.deriveElements()
+end
+
+-- --- Baby (generisch) -----------------------------------------------------
+
+-- Setzt die Baby-Position (gleicher Ring, normalisierter Winkel). Ein bereits
+-- eingerastetes Baby wird nicht bewegt. Kein Elementeffekt; keine Neuableitung.
+function State.setBaby(ring, angle)
+    if not State.baby then
+        return
+    end
+    if State.baby.settled then
+        return
+    end
+    State.baby.ring = ring
+    State.baby.angle = angle
+end
+
+-- Merkt die Richtung des letzten Schubs (+1 CW, -1 CCW). Wird für den
+-- Austrittswinkel des Babys nach einem Brückentransit genutzt (bisherige
+-- Schieberichtung). Rein deklarativ, kein Elementeffekt.
+function State.setBabyPushDirection(direction)
+    if not State.baby then
+        return
+    end
+    State.baby.lastPushDirection = direction
+end
+
+-- Rastet das Baby exakt im Ziel ein (settled = true) und leitet die
+-- Elementzustände neu ab, damit ein baby-gesperrtes Gate aktiv wird.
+function State.settleBaby()
+    if not State.baby then
+        return
+    end
+    local goal = State.room.baby and State.room.baby.goal
+    if not goal then
+        return
+    end
+    State.baby.settled = true
+    State.baby.ring = goal.ring
+    State.baby.angle = goal.angle
     State.deriveElements()
 end
 

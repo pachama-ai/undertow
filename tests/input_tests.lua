@@ -186,12 +186,27 @@ check(BGesture.update(false, true, false, 0.30) == "restart", "ctrl: Hold -> res
 resetRoomContract(1)
 check(Undo.count() == 0, "ctrl: nach Restart Undo = 0")
 
+-- Erzeugt einen veränderten Raumzustand (Player + Schalter, falls vorhanden;
+-- Raum 2 hat keinen Schalter -> Baby-Zustand ändern), damit der Restart-Reset
+-- nachweisbar ist (Undo-Stack gefüllt, Position/State geändert).
+local function makeDirty(roomIndex)
+    local roomData = Levels[roomIndex]
+    State.player.angle = 200
+    if #roomData.switches > 0 then
+        State.setSwitch(roomData.switches[1].id, "A")
+    else
+        -- Raum 2: keine Schalter, einzige mutable Weltgröße ist das Baby.
+        State.baby.ring = "inner"
+        State.baby.angle = 300
+        State.settleBaby()
+    end
+    Undo.push(State.snapshot())
+end
+
 -- Restart behält Raum (Räume 1-6, Abschlussphase A) (Punkt 72/19).
 for _, ri in ipairs({ 1, 2, 3, 4, 5, 6 }) do
     resetRoomContract(ri)
-    State.player.angle = 200
-    State.setSwitch("S1", "A")
-    Undo.push(State.snapshot())
+    makeDirty(ri)
     BGesture.reset()
     press()
     hold(0.6)
@@ -212,8 +227,7 @@ playdate.datastore = {
     delete = function() return true end,
 }
 resetRoomContract(2)
-State.setSwitch("S1", "A")
-Undo.push(State.snapshot())
+makeDirty(2)
 BGesture.reset()
 press()
 hold(0.6)

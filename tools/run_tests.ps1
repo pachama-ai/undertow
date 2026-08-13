@@ -62,6 +62,7 @@ try {
     $srcRoom = Join-Path $root 'source\world\room.lua'
     $srcBridge = Join-Path $root 'source\world\bridge.lua'
     $srcGate = Join-Path $root 'source\world\gate.lua'
+    $srcBaby = Join-Path $root 'source\world\baby.lua'
     $srcSwitch = Join-Path $root 'source\world\switch.lua'
     $srcLevels = Join-Path $root 'source\data\levels.lua'
     $srcRender = Join-Path $root 'source\ui\render.lua'
@@ -87,6 +88,7 @@ try {
     $srcTestsProgression = Join-Path $root 'tests\progression_tests.lua'
     $srcTestsTransition = Join-Path $root 'tests\transition_tests.lua'
     $srcTestsSwitchTraversal = Join-Path $root 'tests\switch_traversal_tests.lua'
+    $srcTestsBaby = Join-Path $root 'tests\baby_tests.lua'
     if (-not (Test-Path -LiteralPath $srcConfig)) { throw "config.lua fehlt: $srcConfig" }
     if (-not (Test-Path -LiteralPath $srcGeometry)) { throw "geometry.lua fehlt: $srcGeometry" }
     if (-not (Test-Path -LiteralPath $srcState)) { throw "state.lua fehlt: $srcState" }
@@ -100,6 +102,7 @@ try {
     if (-not (Test-Path -LiteralPath $srcTestsMovement)) { throw "movement_tests.lua fehlt: $srcTestsMovement" }
     if (-not (Test-Path -LiteralPath $srcBridge)) { throw "bridge.lua fehlt: $srcBridge" }
     if (-not (Test-Path -LiteralPath $srcGate)) { throw "gate.lua fehlt: $srcGate" }
+    if (-not (Test-Path -LiteralPath $srcBaby)) { throw "baby.lua fehlt: $srcBaby" }
     if (-not (Test-Path -LiteralPath $srcSwitch)) { throw "switch.lua fehlt: $srcSwitch" }
     if (-not (Test-Path -LiteralPath $srcLevels)) { throw "levels.lua fehlt: $srcLevels" }
     if (-not (Test-Path -LiteralPath $srcTestsConnection)) { throw "connection_tests.lua fehlt: $srcTestsConnection" }
@@ -124,6 +127,7 @@ try {
     if (-not (Test-Path -LiteralPath $srcTransition)) { throw "transition.lua fehlt: $srcTransition" }
     if (-not (Test-Path -LiteralPath $srcTestsTransition)) { throw "transition_tests.lua fehlt: $srcTestsTransition" }
     if (-not (Test-Path -LiteralPath $srcTestsSwitchTraversal)) { throw "switch_traversal_tests.lua fehlt: $srcTestsSwitchTraversal" }
+    if (-not (Test-Path -LiteralPath $srcTestsBaby)) { throw "baby_tests.lua fehlt: $srcTestsBaby" }
     Copy-Item -LiteralPath $srcConfig -Destination (Join-Path $srcDir 'core\config.lua') -Force
     Copy-Item -LiteralPath $srcGeometry -Destination (Join-Path $srcDir 'core\geometry.lua') -Force
     Copy-Item -LiteralPath $srcState -Destination (Join-Path $srcDir 'core\state.lua') -Force
@@ -141,6 +145,7 @@ try {
     Copy-Item -LiteralPath $srcTestsMovement -Destination (Join-Path $srcDir 'movement_tests.lua') -Force
     Copy-Item -LiteralPath $srcBridge -Destination (Join-Path $srcDir 'world\bridge.lua') -Force
     Copy-Item -LiteralPath $srcGate -Destination (Join-Path $srcDir 'world\gate.lua') -Force
+    Copy-Item -LiteralPath $srcBaby -Destination (Join-Path $srcDir 'world\baby.lua') -Force
     Copy-Item -LiteralPath $srcSwitch -Destination (Join-Path $srcDir 'world\switch.lua') -Force
     Copy-Item -LiteralPath $srcLevels -Destination (Join-Path $srcDir 'data\levels.lua') -Force
     Copy-Item -LiteralPath $srcTestsConnection -Destination (Join-Path $srcDir 'connection_tests.lua') -Force
@@ -161,6 +166,7 @@ try {
     Copy-Item -LiteralPath $srcTestsProgression -Destination (Join-Path $srcDir 'progression_tests.lua') -Force
     Copy-Item -LiteralPath $srcTestsTransition -Destination (Join-Path $srcDir 'transition_tests.lua') -Force
     Copy-Item -LiteralPath $srcTestsSwitchTraversal -Destination (Join-Path $srcDir 'switch_traversal_tests.lua') -Force
+    Copy-Item -LiteralPath $srcTestsBaby -Destination (Join-Path $srcDir 'baby_tests.lua') -Force
 
     # --- 5) pdxinfo und Runner-main.lua ------------------------------------
     Set-Content -LiteralPath (Join-Path $srcDir 'pdxinfo') -Value ("name=Ringetests`nversion=0.1`nbundleID=" + $bundleId + "`n") -Encoding ascii
@@ -200,6 +206,7 @@ local ok, err = pcall(function()
     import("world/room")
     import("world/bridge")
     import("world/gate")
+    import("world/baby")
     import("world/switch")
     import("data/levels")
     import("ui/render")
@@ -225,16 +232,17 @@ local ok, err = pcall(function()
     import("progression_tests")
     import("transition_tests")
     import("switch_traversal_tests")
+    import("baby_tests")
 end)
-if ok and TestReport.geometry and TestReport.state and TestReport.undo and TestReport.player and TestReport.movement and TestReport.connection and TestReport.integration and TestReport.switch and TestReport.render and TestReport.dockAssist and TestReport.camera and TestReport.audio and TestReport.menu and TestReport.save and TestReport.systemMenu and TestReport.input and TestReport.progression and TestReport.transition and TestReport.switchTraversal then
-    local totalPass = TestReport.geometry.pass + TestReport.state.pass + TestReport.undo.pass + TestReport.player.pass + TestReport.movement.pass + TestReport.connection.pass + TestReport.integration.pass + TestReport.switch.pass + TestReport.render.pass + TestReport.dockAssist.pass + TestReport.camera.pass + TestReport.audio.pass + TestReport.menu.pass + TestReport.save.pass + TestReport.systemMenu.pass + TestReport.input.pass + TestReport.progression.pass + TestReport.transition.pass + TestReport.switchTraversal.pass
-    local totalFail = TestReport.geometry.fail + TestReport.state.fail + TestReport.undo.fail + TestReport.player.fail + TestReport.movement.fail + TestReport.connection.fail + TestReport.integration.fail + TestReport.switch.fail + TestReport.render.fail + TestReport.dockAssist.fail + TestReport.camera.fail + TestReport.audio.fail + TestReport.menu.fail + TestReport.save.fail + TestReport.systemMenu.fail + TestReport.input.fail + TestReport.progression.fail + TestReport.transition.fail + TestReport.switchTraversal.fail
+if ok and TestReport.geometry and TestReport.state and TestReport.undo and TestReport.player and TestReport.movement and TestReport.connection and TestReport.integration and TestReport.switch and TestReport.render and TestReport.dockAssist and TestReport.camera and TestReport.audio and TestReport.menu and TestReport.save and TestReport.systemMenu and TestReport.input and TestReport.progression and TestReport.transition and TestReport.switchTraversal and TestReport.baby then
+    local totalPass = TestReport.geometry.pass + TestReport.state.pass + TestReport.undo.pass + TestReport.player.pass + TestReport.movement.pass + TestReport.connection.pass + TestReport.integration.pass + TestReport.switch.pass + TestReport.render.pass + TestReport.dockAssist.pass + TestReport.camera.pass + TestReport.audio.pass + TestReport.menu.pass + TestReport.save.pass + TestReport.systemMenu.pass + TestReport.input.pass + TestReport.progression.pass + TestReport.transition.pass + TestReport.switchTraversal.pass + TestReport.baby.pass
+    local totalFail = TestReport.geometry.fail + TestReport.state.fail + TestReport.undo.fail + TestReport.player.fail + TestReport.movement.fail + TestReport.connection.fail + TestReport.integration.fail + TestReport.switch.fail + TestReport.render.fail + TestReport.dockAssist.fail + TestReport.camera.fail + TestReport.audio.fail + TestReport.menu.fail + TestReport.save.fail + TestReport.systemMenu.fail + TestReport.input.fail + TestReport.progression.fail + TestReport.transition.fail + TestReport.switchTraversal.fail + TestReport.baby.fail
     print("RESULT passed=" .. totalPass .. " failed=" .. totalFail .. " complete=1")
 else
     if not ok then
         print("TESTS_RUN_ERROR: " .. tostring(err))
     else
-        print("MISSING_TEST_RESULTS: geometry=" .. tostring(TestReport.geometry ~= nil) .. " state=" .. tostring(TestReport.state ~= nil) .. " undo=" .. tostring(TestReport.undo ~= nil) .. " player=" .. tostring(TestReport.player ~= nil) .. " movement=" .. tostring(TestReport.movement ~= nil) .. " connection=" .. tostring(TestReport.connection ~= nil) .. " integration=" .. tostring(TestReport.integration ~= nil) .. " switch=" .. tostring(TestReport.switch ~= nil) .. " render=" .. tostring(TestReport.render ~= nil) .. " dockAssist=" .. tostring(TestReport.dockAssist ~= nil) .. " camera=" .. tostring(TestReport.camera ~= nil) .. " audio=" .. tostring(TestReport.audio ~= nil) .. " menu=" .. tostring(TestReport.menu ~= nil) .. " save=" .. tostring(TestReport.save ~= nil) .. " systemMenu=" .. tostring(TestReport.systemMenu ~= nil) .. " input=" .. tostring(TestReport.input ~= nil) .. " progression=" .. tostring(TestReport.progression ~= nil) .. " transition=" .. tostring(TestReport.transition ~= nil) .. " switchTraversal=" .. tostring(TestReport.switchTraversal ~= nil))
+        print("MISSING_TEST_RESULTS: geometry=" .. tostring(TestReport.geometry ~= nil) .. " state=" .. tostring(TestReport.state ~= nil) .. " undo=" .. tostring(TestReport.undo ~= nil) .. " player=" .. tostring(TestReport.player ~= nil) .. " movement=" .. tostring(TestReport.movement ~= nil) .. " connection=" .. tostring(TestReport.connection ~= nil) .. " integration=" .. tostring(TestReport.integration ~= nil) .. " switch=" .. tostring(TestReport.switch ~= nil) .. " render=" .. tostring(TestReport.render ~= nil) .. " dockAssist=" .. tostring(TestReport.dockAssist ~= nil) .. " camera=" .. tostring(TestReport.camera ~= nil) .. " audio=" .. tostring(TestReport.audio ~= nil) .. " menu=" .. tostring(TestReport.menu ~= nil) .. " save=" .. tostring(TestReport.save ~= nil) .. " systemMenu=" .. tostring(TestReport.systemMenu ~= nil) .. " input=" .. tostring(TestReport.input ~= nil) .. " progression=" .. tostring(TestReport.progression ~= nil) .. " transition=" .. tostring(TestReport.transition ~= nil) .. " switchTraversal=" .. tostring(TestReport.switchTraversal ~= nil) .. " baby=" .. tostring(TestReport.baby ~= nil))
     end
 end
 if logFile then
