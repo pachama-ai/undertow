@@ -2233,6 +2233,9 @@ end
 -- Sauberer Anschluss am Kernrand (kein Spalt, kein Überstand) — der
 -- Mittelpunkt/Kern selbst bleibt unverändert (drawCore). Für toR < fromR
 -- (Raum 7: Kern 64 < Innenring 68) zeichnet das Segment nach innen.
+-- Das Gate kann auf dem INNEREN oder dem ÄUSSEREN Ring liegen (gate.ring).
+-- Beide Fälle sind Center-Bridges zum Kern: inner -> Kernrand bzw.
+-- outer -> Kernrand (die äußere Speiche überbrückt sichtbar den Innenring).
 local function drawGate(previewOn, currentRoomIndex)
     local g = state.room.gate
     if not g then
@@ -2240,10 +2243,13 @@ local function drawGate(previewOn, currentRoomIndex)
     end
     local ringName = g.ring or "inner"
     if ringName == "outer" then
-        -- Außenring-Gate (generisch): normale Ring->Ring-Brücke outer <-> inner.
+        -- Außenring-Gate (generisch, z. B. Level 8): Center-Bridge von der
+        -- AUSSENRING-Bahn zum sichtbaren Kernrand — NICHT als Ring->Ring-
+        -- Brücke, sondern als echte Speiche zum Mittelpunkt (das Segment
+        -- überbrückt den Innenring; der Transit führt im Gameplay zum Kern).
         local outerR = Render.ringRadius("outer")
-        local innerR = Render.ringRadius("inner")
-        drawBridgeSegment(g, previewOn, innerR, outerR)
+        local coreEnd = Render.coreEdgeRadius() - config.coreBridgeOverlap
+        drawBridgeSegment(g, previewOn, outerR, coreEnd)
     else
         -- Innenring-Gate (Standard): Brücke inner -> sichtbarer Kernrand. Die
         -- Brücke endet mit einem kleinen Überlapp IN den Kern (coreBridgeOverlap),
