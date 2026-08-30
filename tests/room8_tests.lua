@@ -3,33 +3,41 @@
 --   Tutorial (phaseTwoStartRoom = 8).
 --
 --   MECHANIKEN (alle bekannt, kombiniert):
---     - ZWEI Druckplatten P1 (outer@130 -> Bridge A@112) und P2 (outer@149 ->
---       Bridge C@132): gedrückt nur, solange das Baby exakt dort geparkt ist.
---     - ZWEI Doppelschalter D1 (inner@95, Start A) und D2 (inner@225, Start B).
+--     - DREI Druckplatten P1 (outer@130 -> A@112), P2 (outer@149 -> C@132),
+--       P3 (outer@180 -> D@5): gedrückt nur, solange das Baby dort geparkt ist.
+--     - ZWEI Doppelschalter D1 (inner@95, Start A) und D2 (inner@225, Start A).
 --     - Einmalschalter O (inner@200, Start A): nur die CCW-Überquerung (-> B)
 --       verbraucht ihn und öffnet den finalen Shutter S_FINAL_O DAUERHAFT.
---     - ZWISCHENZIEL (O erreichbar): D1=B UND D2=A UND P2=aktiv.
---     - FINALZUSTAND (Weg zum Tor): D1=A, D2=B, O verbraucht, P2 frei.
---     - Vier aktivierbare Brücken A (P1), R (D1=B), C (P2), F (D2=B, durch
---       S_FI zusätzlich gesperrt bis D1=A) + Einmal-Brücke U (outer@325) +
---       Tor T (outer@355, nur gemeinsam).
+--     - ZWISCHENZIEL (O erreichbar): D1=A UND D2=A UND P2=aktiv.
+--     - FINALZUSTAND (Weg zum Tor): D1=A, D2=B, O verbraucht, P1/P2/P3 frei.
+--     - D1 wird VIERMAL umgestellt (B->A->B->A), D2 EINMAL (A->B). Das Baby
+--       wird DREIMAL umpositioniert (P1->P2->P3).
+--     - Sechs Brücken: A (P1), B (D1=B), C (P2), D (P3), F (D2=B, finale
+--       Verbindung, durch S_FI bis D1=A gesperrt) + Einmal-Brücke U (outer@45)
+--       + Tor T (outer@355, nur gemeinsam).
 --
 --   ABLAUF (Soll-Lösung, Winkel physikalisch verifiziert):
 --     1) Baby CW auf P1 (130) schieben -> Bridge A@112. Player SOLO über A
 --        nach innen (inner@112).
---     2) D1 CCW -> B: Bridge R@60, S_D1 offen, S_FINAL_A + S_FI zu. SOLO über
---        R nach außen (outer@60, ANDERE Babyseite).
+--     2) D1 CCW -> B: Bridge B@75, S_O+S_FI+S_FINAL_D1 zu. SOLO über B nach
+--        außen (outer@75, ANDERE Babyseite).
 --     3) Baby von P1 CW zu P2 (149) schieben -> Bridge C@132 (A verschwindet).
---     4) SOLO über C nach innen (inner@132). D2 CW -> A: S_D2 offen.
---     5) Durch S_D1 + S_D2 (beide offen) zu O. O CCW -> B verbraucht,
+--     4) SOLO über C nach innen (inner@132). D1 B -> A (CW): S_O öffnet,
+--        S_FI+S_FINAL_D1 öffnen, B verschwindet.
+--     5) CW durch S_O (D1=A) + S_D2 (D2=A) zu O. O CCW -> B verbraucht,
 --        S_FINAL_O dauerhaft offen. (CW wäre wirkungslos.)
---     6) D2 CCW -> B: S_D2 zu. D1 bleibt B (R wird noch gebraucht).
---     7) SOLO über R wieder nach außen (outer@60, RICHTIGE Seite von Baby/P2).
---     8) Baby von P2 zur Einmal-Brücke U (325) schieben. U GEMEINSAM ->
---        inner@325/Baby@315.
---     9) D1 CW -> A: R verschwindet, S_FINAL_A + S_FI öffnen den finalen Weg.
---    10) Über F (D2=B, D1=A) gemeinsam auf den Außenring (outer@295/Baby@305),
---        durch S_FINAL_O + S_FINAL_A zum Tor T (outer@355) -> gemeinsamer
+--     6) D1 A -> B (CCW): S_O+S_FI+S_FINAL_D1 zu, B wieder da. SOLO über B
+--        nach außen (outer@75, RICHTIGE Seite von Baby/P2).
+--     7) Baby von P2 CW zu P3 (180) schieben -> Bridge D@5 (C verschwindet).
+--     8) SOLO über D nach innen (inner@5). D1 B -> A (CW): B weg (Rückweg
+--        geopfert), S_FI+S_FINAL_D1 offen. D2 A -> B (CCW): S_D2 zu,
+--        S_FINAL_D2 + F öffnen.
+--     9) SOLO über D zurück nach außen (outer@5), Baby von P3 holen.
+--    10) Baby zur Einmal-Brücke U (45) schieben. U GEMEINSAM -> inner@45/
+--        Baby@35.
+--    11) Finaler Push: Player+Baby über F (D2=B, inner@295) auf den Außenring
+--        (outer@295/Baby@305), durch S_FINAL_D1 (D1=A) + S_FINAL_D2 (D2=B) +
+--        S_FINAL_O (O verbraucht) zum Tor T (outer@355) -> gemeinsamer
 --        Kernbrücken-Transit -> EXIT.
 --
 --   DIE FALLE: U ist früh sichtbar und benutzbar (frei). Zu frühe Benutzung
@@ -37,12 +45,12 @@
 --   inneren Ring gebracht werden -> Sackgasse, B-Restart.
 --
 --   ANTI-BYPASS (explizit geprüft):
---     - A/C sind ohne Baby auf der jeweiligen Platte inaktiv.
---     - O ist ohne D1=B (S_D1 zu) NICHT erreichbar — der Korridor ist versiegelt.
+--     - A/C/D sind ohne Baby auf der jeweiligen Platte inaktiv.
+--     - O ist ohne D1=A (S_O zu) ODER D2=A (S_D2 zu) NICHT erreichbar.
 --     - O CW überquert = wirkungslos (wird nicht verbraucht).
 --     - F ist durch S_FI gesperrt, solange D1=B (kein F-Bypass statt U).
 --     - U SOLO benutzt -> Level nicht lösbar.
---     - Finale Route mit D1=B ODER ohne O nicht offen (Tor gesperrt).
+--     - Finale Route mit D1=B / D2=A / ohne O nicht offen (Tor gesperrt).
 --     - Baby kann ohne Shared-U nicht zum Zentrum.
 -- Am Ende wird das Ergebnis in TestReport.room8 gesammelt.
 
@@ -92,66 +100,76 @@ do
         if sw.id == "O" then o = sw end
     end
     check(d1 ~= nil and d1.ring == "inner" and approx(d1.angle, 95) and d1.state == "A",
-        "daten: D1 inner@95 (Start A — muss auf B und zurück auf A)")
-    check(type(d1.onA) == "table" and d1.onA[1] == "S_FINAL_A" and d1.onA[2] == "S_FI"
-        and type(d1.onB) == "table" and d1.onB[1] == "R" and d1.onB[2] == "S_D1",
-        "daten: D1 — A öffnet S_FINAL_A+S_FI, B aktiviert R+S_D1")
-    check(d2 ~= nil and d2.ring == "inner" and approx(d2.angle, 225) and d2.state == "B",
-        "daten: D2 inner@225 (Start B — muss auf A und zurück auf B)")
-    check(d2.onA == "S_D2" and d2.onB == "F",
-        "daten: D2 — A öffnet S_D2, B aktiviert F")
+        "daten: D1 inner@95 (Start A — 4 Wechsel: B->A->B->A)")
+    check(type(d1.onA) == "table" and d1.onA[1] == "S_O" and d1.onA[2] == "S_FI"
+        and d1.onA[3] == "S_FINAL_D1" and d1.onB == "B",
+        "daten: D1 — A öffnet S_O+S_FI+S_FINAL_D1, B aktiviert B")
+    check(d2 ~= nil and d2.ring == "inner" and approx(d2.angle, 225) and d2.state == "A",
+        "daten: D2 inner@225 (Start A — genau 1 Wechsel: A->B)")
+    check(type(d2.onA) == "string" and d2.onA == "S_D2" and type(d2.onB) == "table"
+        and d2.onB[1] == "S_FINAL_D2" and d2.onB[2] == "F",
+        "daten: D2 — A öffnet S_D2, B öffnet S_FINAL_D2 + aktiviert F")
     check(o ~= nil and o.ring == "inner" and approx(o.angle, 200) and o.state == "A" and o.oneShot == true,
         "daten: O inner@200 EINMALSCHALTER (Start A)")
     check(type(o.onA) == "table" and #o.onA == 0 and o.onB == "S_FINAL_O",
         "daten: O — A öffnet nichts, B öffnet S_FINAL_O (One-Shot)")
-    check(#r8.shutters == 5, "daten: genau 5 Blenden (S_D1/S_D2/S_FI/S_FINAL_O/S_FINAL_A)")
-    local sD1, sD2, sFI, sFO, sFA
+    check(#r8.shutters == 6, "daten: genau 6 Blenden (S_O/S_D2/S_FI/S_FINAL_D1/S_FINAL_D2/S_FINAL_O)")
+    local sO, sD2, sFI, sFD1, sFD2, sFO
     for _, shu in ipairs(r8.shutters) do
-        if shu.id == "S_D1" then sD1 = shu end
+        if shu.id == "S_O" then sO = shu end
         if shu.id == "S_D2" then sD2 = shu end
         if shu.id == "S_FI" then sFI = shu end
+        if shu.id == "S_FINAL_D1" then sFD1 = shu end
+        if shu.id == "S_FINAL_D2" then sFD2 = shu end
         if shu.id == "S_FINAL_O" then sFO = shu end
-        if shu.id == "S_FINAL_A" then sFA = shu end
     end
-    check(sD1 ~= nil and sD1.ring == "inner" and approx(sD1.angle, 150),
-        "daten: S_D1 inner@150 (D1-B offen, erste O-Hälfte)")
-    check(sD2 ~= nil and sD2.ring == "inner" and approx(sD2.angle, 255),
-        "daten: S_D2 inner@255 (D2-A offen, zweite O-Hälfte)")
+    check(sO ~= nil and sO.ring == "inner" and approx(sO.angle, 150),
+        "daten: S_O inner@150 (D1-A offen, erste O-Hälfte)")
+    check(sD2 ~= nil and sD2.ring == "inner" and approx(sD2.angle, 178),
+        "daten: S_D2 inner@178 (D2-A offen, zweite O-Hälfte auf dem O-Zulauf)")
     check(sFI ~= nil and sFI.ring == "inner" and approx(sFI.angle, 295),
         "daten: S_FI inner@295 (D1-A offen, sperrt F bis zum Finalzustand)")
+    check(sFD1 ~= nil and sFD1.ring == "outer" and approx(sFD1.angle, 305),
+        "daten: S_FINAL_D1 outer@305 (D1-A offen, finaler Shutter)")
+    check(sFD2 ~= nil and sFD2.ring == "outer" and approx(sFD2.angle, 322),
+        "daten: S_FINAL_D2 outer@322 (D2-B offen, finaler Shutter)")
     check(sFO ~= nil and sFO.ring == "outer" and approx(sFO.angle, 340),
         "daten: S_FINAL_O outer@340 (O-B offen, finaler Shutter)")
-    check(sFA ~= nil and sFA.ring == "outer" and approx(sFA.angle, 360),
-        "daten: S_FINAL_A outer@360 (D1-A offen, finaler Abschnitt)")
-    check(#r8.bridges == 5, "daten: genau 5 Brücken (A/R/C/F + Einmal-Brücke U)")
-    local bA, bR, bC, bF, bU
+    check(#r8.bridges == 6, "daten: genau 6 Brücken (A/B/C/D/F + Einmal-Brücke U)")
+    local bA, bB, bC, bD, bF, bU
     for _, b in ipairs(r8.bridges) do
         if b.id == "A" then bA = b end
-        if b.id == "R" then bR = b end
+        if b.id == "B" then bB = b end
         if b.id == "C" then bC = b end
+        if b.id == "D" then bD = b end
         if b.id == "F" then bF = b end
         if b.id == "U" then bU = b end
     end
     check(bA ~= nil and bA.free == false and approx(bA.angle, 112),
         "daten: Bridge A@112 (free=false — von P1 gesteuert)")
-    check(bR ~= nil and bR.free == false and approx(bR.angle, 60),
-        "daten: Bridge R@60 (free=false — von D1 in Zustand B)")
+    check(bB ~= nil and bB.free == false and approx(bB.angle, 75),
+        "daten: Bridge B@75 (free=false — von D1 in Zustand B)")
     check(bC ~= nil and bC.free == false and approx(bC.angle, 132),
         "daten: Bridge C@132 (free=false — von P2 gesteuert)")
+    check(bD ~= nil and bD.free == false and approx(bD.angle, 5) and bD.babyLandDir == -1,
+        "daten: Bridge D@5 (free=false — von P3 gesteuert, dritter Einstieg)")
     check(bF ~= nil and bF.free == false and approx(bF.angle, 295) and bF.babyLandDir == 1,
         "daten: Bridge F@295 (free=false — von D2 in Zustand B, finale Verbindung)")
-    check(bU ~= nil and bU.free == true and bU.oneShot == true and approx(bU.angle, 325) and bU.babyLandDir == -1,
-        "daten: Einmal-Brücke U@325 FREI + oneShot (die FALLE)")
-    check(#r8.plates == 2, "daten: genau 2 Druckplatten (P1 + P2)")
-    local p1, p2
+    check(bU ~= nil and bU.free == true and bU.oneShot == true and approx(bU.angle, 45) and bU.babyLandDir == -1,
+        "daten: Einmal-Brücke U@45 FREI + oneShot (die FALLE)")
+    check(#r8.plates == 3, "daten: genau 3 Druckplatten (P1 + P2 + P3)")
+    local p1, p2, p3
     for _, p in ipairs(r8.plates) do
         if p.id == "P1" then p1 = p end
         if p.id == "P2" then p2 = p end
+        if p.id == "P3" then p3 = p end
     end
     check(p1 ~= nil and p1.ring == "outer" and approx(p1.angle, 130) and p1.on == "A",
         "daten: P1 outer@130 steuert Bridge A (erster Baby-Parkplatz)")
     check(p2 ~= nil and p2.ring == "outer" and approx(p2.angle, 149) and p2.on == "C",
         "daten: P2 outer@149 steuert Bridge C (zweiter Baby-Parkplatz)")
+    check(p3 ~= nil and p3.ring == "outer" and approx(p3.angle, 180) and p3.on == "D",
+        "daten: P3 outer@180 steuert Bridge D (dritter Baby-Parkplatz)")
     check(r8.gate.id == "T" and r8.gate.ring == "outer" and r8.gate.free == true
         and approx(r8.gate.angle, 355),
         "daten: Tor T outer@355 (frei, normale Center-Bridge)")
@@ -161,18 +179,21 @@ end
 -- --- Startzustand ----------------------------------------------------------
 do
     setup(Levels[8])
-    check(State.platePressed["P1"] == false and State.platePressed["P2"] == false,
-        "start: beide Platten frei")
+    check(State.platePressed["P1"] == false and State.platePressed["P2"] == false
+        and State.platePressed["P3"] == false,
+        "start: alle drei Platten frei")
     check(State.switchStates["D1"] == "A", "start: D1 = A")
-    check(State.elementStates["R"] == false, "start: Bridge R inaktiv (D1=A)")
-    check(State.elementStates["S_D1"] == false, "start: S_D1 geschlossen (D1=A)")
-    check(State.elementStates["S_FINAL_A"] == true, "start: S_FINAL_A offen (D1=A)")
+    check(State.elementStates["B"] == false, "start: Bridge B inaktiv (D1=A)")
+    check(State.elementStates["S_O"] == true, "start: S_O offen (D1=A)")
     check(State.elementStates["S_FI"] == true, "start: S_FI offen (D1=A)")
-    check(State.switchStates["D2"] == "B", "start: D2 = B")
-    check(State.elementStates["S_D2"] == false, "start: S_D2 geschlossen (D2=B)")
-    check(State.elementStates["F"] == true, "start: Bridge F aktiv (D2=B)")
+    check(State.elementStates["S_FINAL_D1"] == true, "start: S_FINAL_D1 offen (D1=A)")
+    check(State.switchStates["D2"] == "A", "start: D2 = A")
+    check(State.elementStates["S_D2"] == true, "start: S_D2 offen (D2=A)")
+    check(State.elementStates["S_FINAL_D2"] == false, "start: S_FINAL_D2 zu (D2=A)")
+    check(State.elementStates["F"] == false, "start: Bridge F inaktiv (D2=A)")
     check(State.elementStates["A"] == false, "start: Bridge A INAKTIV (P1 frei)")
     check(State.elementStates["C"] == false, "start: Bridge C INAKTIV (P2 frei)")
+    check(State.elementStates["D"] == false, "start: Bridge D INAKTIV (P3 frei)")
     check(State.switchStates["O"] == "A", "start: O = A")
     check(State.elementStates["S_FINAL_O"] == false, "start: S_FINAL_O geschlossen (O=A)")
     check(State.elementStates["U"] == true, "start: Einmal-Brücke U FREI aktiv (Falle sichtbar)")
@@ -183,27 +204,32 @@ do
         "start: Baby outer@50")
 end
 
--- --- Anti-Bypass: A/C sind ohne Baby auf der Platte unbenutzbar -------------
+-- --- Anti-Bypass: A/C/D sind ohne Baby auf der Platte unbenutzbar ----------
 do
     setup(Levels[8])
-    check(State.elementStates["A"] == false, "a-inaktiv: Bridge A INAKTIV (Start)")
-    check(State.elementStates["C"] == false, "a-inaktiv: Bridge C INAKTIV (Start)")
-    -- Baby auf P1 parken (A aktiv), dann auf P2 schieben (A verschwindet, C da).
+    check(State.elementStates["A"] == false, "platten: Bridge A INAKTIV (Start)")
+    check(State.elementStates["C"] == false, "platten: Bridge C INAKTIV (Start)")
+    check(State.elementStates["D"] == false, "platten: Bridge D INAKTIV (Start)")
+    -- Baby auf P1 parken (A aktiv), auf P2 schieben (C aktiv), auf P3 schieben (D aktiv).
     local _, r1 = Room.movePlayer(101.83) -- 20 -> 121.83, Baby 50 -> 130 (P1)
-    check(r1.blocked == false, "a-inaktiv: Parken auf P1 läuft")
-    check(State.elementStates["A"] == true, "a-inaktiv: A aktiv (Baby auf P1)")
-    check(State.elementStates["C"] == false, "a-inaktiv: C INAKTIV (Baby nicht auf P2)")
+    check(r1.blocked == false, "platten: Parken auf P1 läuft")
+    check(State.elementStates["A"] == true, "platten: A aktiv (Baby auf P1)")
+    check(State.elementStates["C"] == false, "platten: C INAKTIV (Baby nicht auf P2)")
+    -- Schub P1 -> P2: Player bei 121.83 (CCW des Babys) schiebt CW.
     local _, r2 = Room.movePlayer(19) -- 121.83 -> 140.83, Baby 130 -> 149 (P2)
-    check(r2.blocked == false, "a-inaktiv: Schub zu P2 läuft")
-    check(State.elementStates["A"] == false, "a-inaktiv: A INAKTIV (Baby nicht auf P1)")
-    check(State.elementStates["C"] == true, "a-inaktiv: C aktiv (Baby auf P2)")
+    check(r2.blocked == false, "platten: Schub zu P2 läuft")
+    check(State.elementStates["A"] == false, "platten: A INAKTIV (Baby nicht auf P1)")
+    check(State.elementStates["C"] == true, "platten: C aktiv (Baby auf P2)")
+    -- Schub P2 -> P3: Player bei 140.83 (CCW des Babys) schiebt CW.
+    local _, r3 = Room.movePlayer(31) -- 140.83 -> 171.83, Baby 149 -> 180 (P3)
+    check(r3.blocked == false, "platten: Schub zu P3 läuft")
+    check(State.elementStates["C"] == false, "platten: C INAKTIV (Baby nicht auf P2)")
+    check(State.elementStates["D"] == true, "platten: D aktiv (Baby auf P3)")
 end
 
--- --- Anti-Bypass: Tor braucht das Baby (Solo am Tor = kein Exit) -------------
+-- --- Anti-Bypass: Tor braucht das Baby (Solo am Tor = kein Exit) -----------
 do
     setup(Levels[8])
-    -- Player direkt an die Tor-Dockposition setzen, Baby bleibt auf dem
-    -- Außenring: kein gemeinsamer Ausgang.
     State.player.ring = "outer"
     State.player.angle = 355
     check(Gate.isUsable(Levels[8].gate, "outer", 355) == false,
@@ -212,7 +238,7 @@ do
     check(res.used == false, "gate-baby: tryUseConnection am Tor ohne Baby = kein Exit")
 end
 
--- --- Phase 1: Baby auf P1 parken + Solo über A ------------------------------
+-- --- Phase 1: Baby auf P1 parken + Solo über A -----------------------------
 do
     setup(Levels[8])
     local _, r = Room.movePlayer(101.83) -- 20 -> 121.83, Baby 50 -> 130 (EXAKT P1)
@@ -221,7 +247,6 @@ do
     check(State.elementStates["A"] == true, "p1: Bridge A MATERIALISIERT (P1 aktiv)")
     check(approx(State.player.angle, 121.83, 0.5), "p1: Player bei ~122")
     check(approx(State.baby.angle, 130, 1.0), "p1: Baby geparkt auf P1 (130)")
-    -- Solo über A (outer@112): der Player steht bereits im A-Dock.
     local res = Room.tryUseConnection()
     check(res.used == true and res.kind == "bridge" and res.id == "A",
         "p1: Player benutzt Bridge A ALLEIN")
@@ -231,26 +256,28 @@ do
     check(State.platePressed["P1"] == true, "p1: Baby hält P1 -> A bleibt ausgefahren")
 end
 
--- --- Phase 2: D1 CCW -> B + Solo über R ------------------------------------
+-- --- Phase 2: D1 CCW -> B + Solo über B ------------------------------------
 do
     setup(Levels[8])
-    Room.movePlayer(101.83) -- Baby auf P1
-    Room.tryUseConnection() -- Solo A
+    Room.movePlayer(101.83)
+    Room.tryUseConnection()
     Bridge.update(0.5) -- inner@112
-    -- D1@95 CCW -> B (Eintritt 102, Austritt 88), Sweep endet an R@60.
-    local _, r1 = Room.movePlayer(-52) -- 112 -> 60
+    -- D1@95 CCW -> B (Eintritt 102, Austritt 88); Sweep endet direkt am B-Dock
+    -- (inner@63): Bridge B@75 materialisiert während des Sweeps.
+    local _, r1 = Room.movePlayer(-49) -- 112 -> 63
     check(r1.blocked == false, "p2: D1-CCW-Sweep läuft")
-    check(State.switchStates["D1"] == "B", "p2: D1=B (Rückweg + O-Zugang)")
-    check(State.elementStates["R"] == true, "p2: Bridge R materialisiert (D1=B)")
-    check(State.elementStates["S_D1"] == true, "p2: S_D1 offen (erste O-Hälfte)")
-    check(State.elementStates["S_FINAL_A"] == false, "p2: S_FINAL_A zu (finaler Weg gesperrt)")
-    check(State.elementStates["S_FI"] == false, "p2: S_FI zu (finale Bridge F gesperrt)")
-    -- Solo über R (inner@60) -> outer@60 (ANDERE Babyseite).
+    check(State.switchStates["D1"] == "B", "p2: D1=B (Rückweg + O-Zugang zu)")
+    check(State.elementStates["B"] == true, "p2: Bridge B materialisiert (D1=B)")
+    check(State.elementStates["S_O"] == false, "p2: S_O zu (O-Zugang 1 gesperrt)")
+    check(State.elementStates["S_FI"] == false, "p2: S_FI zu (finale Verbindung F gesperrt)")
+    check(State.elementStates["S_FINAL_D1"] == false, "p2: S_FINAL_D1 zu (finaler Weg zu)")
+    check(approx(State.player.angle, 63, 0.5), "p2: Player inner@63 (B-Dock)")
+    -- SOLO über B -> outer@75 (ANDERE Babyseite).
     local res = Room.tryUseConnection()
-    check(res.used == true and res.kind == "bridge" and res.id == "R", "p2: Solo-Transit R")
+    check(res.used == true and res.kind == "bridge" and res.id == "B", "p2: Solo-Transit B")
     Bridge.update(0.5)
-    check(State.player.ring == "outer" and approx(State.player.angle, 60, 0.5),
-        "p2: Player outer@60 (ANDERE Babyseite)")
+    check(State.player.ring == "outer" and approx(State.player.angle, 75, 0.5),
+        "p2: Player outer@75 (ANDERE Babyseite)")
     check(State.baby ~= nil and State.baby.ring == "outer" and approx(State.baby.angle, 130, 1.0),
         "p2: Baby weiterhin auf P1 (130)")
 end
@@ -259,13 +286,13 @@ end
 do
     setup(Levels[8])
     Room.movePlayer(101.83)
-    Room.tryUseConnection() -- Solo A
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B, inner@60
-    Room.tryUseConnection() -- Solo R
-    Bridge.update(0.5) -- outer@60
+    Room.movePlayer(-49) -- D1=B, inner@63
+    Room.tryUseConnection() -- Solo B
+    Bridge.update(0.5) -- outer@75
     -- CW-Schub 130 -> 149 (P2): der Player ist CCW des Babys.
-    local _, r1 = Room.movePlayer(80.83) -- 60 -> 140.83, Baby 130 -> 149 (P2)
+    local _, r1 = Room.movePlayer(65.83) -- 75 -> 140.83, Baby 130 -> 149 (P2)
     check(r1.blocked == false, "p3: Schub P1->P2 läuft")
     check(State.platePressed["P1"] == false, "p3: P1 FREI (Baby herunter)")
     check(State.elementStates["A"] == false, "p3: Bridge A VERSCHWUNDEN (bewusst geopfert)")
@@ -275,222 +302,319 @@ do
     check(approx(State.player.angle, 140.83, 0.5), "p3: Player bei ~141 (C-Dock)")
 end
 
--- --- Phase 4: Solo über C + D2 CW -> A -------------------------------------
+-- --- Phase 4: Solo über C + D1 B -> A (CW) ---------------------------------
 do
     setup(Levels[8])
     Room.movePlayer(101.83)
-    Room.tryUseConnection() -- Solo A
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
+    Room.movePlayer(-49)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(80.83) -- Baby auf P2
+    Room.movePlayer(65.83) -- Baby auf P2
     -- Solo über C (outer@132): Player@140.83 steht bereits im C-Dock.
     local res = Room.tryUseConnection()
     check(res.used == true and res.kind == "bridge" and res.id == "C", "p4: Solo-Transit C")
     Bridge.update(0.5)
     check(State.player.ring == "inner" and approx(State.player.angle, 132, 0.5),
         "p4: Player inner@132")
-    -- D2@225 CW -> A: CW durch S_D1 (offen), O CW (no-op), D2 CW -> A.
-    local _, r2 = Room.movePlayer(100) -- 132 -> 232
-    check(r2.blocked == false, "p4: D2-CW-Sweep läuft")
-    check(State.switchStates["D2"] == "A", "p4: D2=A (zweite O-Hälfte)")
-    check(State.elementStates["S_D2"] == true, "p4: S_D2 offen")
-    check(State.elementStates["F"] == false, "p4: Bridge F inaktiv (D2=A)")
-    check(approx(State.player.angle, 232, 0.5), "p4: Player inner@232")
+    -- CCW VOR D1's CW-Eintritt (87, strikt < 88), dann CW durch [88,102] -> A.
+    local _, r1 = Room.movePlayer(-45) -- 132 -> 87 (D1 bleibt B)
+    check(r1.blocked == false, "p4: CCW-Anlauf zu D1 läuft")
+    local _, r2 = Room.movePlayer(15) -- 87 -> 102 (D1 CW -> A)
+    check(r2.blocked == false, "p4: D1-CW-Sweep läuft")
+    check(State.switchStates["D1"] == "A", "p4: D1=A (ZWISCHENZIEL)")
+    check(State.elementStates["B"] == false, "p4: Bridge B verschwunden (D1=A)")
+    check(State.elementStates["S_O"] == true, "p4: S_O offen (erste O-Hälfte)")
+    check(State.elementStates["S_FI"] == true, "p4: S_FI offen (F entsperrt)")
+    check(State.elementStates["S_FINAL_D1"] == true, "p4: S_FINAL_D1 offen")
+    check(approx(State.player.angle, 102, 0.5), "p4: Player inner@102")
 end
 
 -- --- Phase 5: O korrekt (CCW) verbrauchen ----------------------------------
 do
     setup(Levels[8])
     Room.movePlayer(101.83)
-    Room.tryUseConnection() -- Solo A
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
+    Room.movePlayer(-49)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(80.83) -- Baby auf P2
-    Room.tryUseConnection() -- Solo C
+    Room.movePlayer(65.83)
+    Room.tryUseConnection()
     Bridge.update(0.5) -- inner@132
-    Room.movePlayer(100) -- D2=A, Player@232
-    -- O@200 CCW -> B verbrauchen (Eintritt 207, Austritt 193).
-    local _, r = Room.movePlayer(-39) -- 232 -> 193
-    check(r.blocked == false, "p5: O-CCW-Sweep läuft")
+    Room.movePlayer(-45)
+    Room.movePlayer(15) -- D1=A, Player@102
+    -- CW durch S_O (offen) + S_D2 (offen, D2=A) + O CW (no-op) ÜBER die
+    -- O-Austrittskante (208) hinaus, dann CCW durch [193,207] -> B (One-Shot).
+    local _, r1 = Room.movePlayer(106) -- 102 -> 208
+    check(r1.blocked == false, "p5: CW-Zulauf zum O läuft")
+    local _, r2 = Room.movePlayer(-15) -- 208 -> 193 (O CCW -> B)
+    check(r2.blocked == false, "p5: O-CCW-Sweep läuft")
     check(State.switchStates["O"] == "B", "p5: O korrekt CCW verbraucht (O=B)")
     check(State.consumedSwitches["O"] == true, "p5: O DAUERHAFT verbraucht (oneShot)")
     check(State.elementStates["S_FINAL_O"] == true, "p5: S_FINAL_O DAUERHAFT offen")
     check(approx(State.player.angle, 193, 0.5), "p5: Player inner@193")
 end
 
--- --- Phase 6: D2 CCW -> B (O-Zugang schließt) ------------------------------
+-- --- Phase 6: D1 A -> B (CCW) + Solo über B (Rückweg) ----------------------
 do
     setup(Levels[8])
     Room.movePlayer(101.83)
-    Room.tryUseConnection() -- Solo A
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
+    Room.movePlayer(-49)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(80.83) -- Baby auf P2
-    Room.tryUseConnection() -- Solo C
+    Room.movePlayer(65.83)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(100) -- D2=A, Player@232
-    Room.movePlayer(-39) -- O verbraucht, Player@193
-    -- CW über O (no-op) und D2 (no-op) an die CW-Seite, dann CCW -> B.
-    local _, r = Room.movePlayer(47) -- 193 -> 240
-    check(r.blocked == false, "p6: CW-Anlauf läuft")
-    local _, r2 = Room.movePlayer(-22) -- 240 -> 218 (D2 CCW -> B)
-    check(r2.blocked == false, "p6: D2-CCW-Sweep läuft")
-    check(State.switchStates["D2"] == "B", "p6: D2=B (finale Bridge F)")
-    check(State.elementStates["F"] == true, "p6: Bridge F MATERIALISIERT (D2=B)")
-    check(State.elementStates["S_D2"] == false, "p6: S_D2 zu (O-Zugang wieder gesperrt)")
-    check(State.switchStates["D1"] == "B", "p6: D1 bleibt B (R wird noch gebraucht)")
-    check(State.elementStates["S_FI"] == false, "p6: S_FI zu (F bleibt bis D1=A gesperrt)")
-end
-
--- --- Phase 7: Solo über R (zweiter Rückweg) --------------------------------
-do
-    setup(Levels[8])
-    Room.movePlayer(101.83)
-    Room.tryUseConnection() -- Solo A
-    Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
-    Bridge.update(0.5)
-    Room.movePlayer(80.83) -- Baby auf P2
-    Room.tryUseConnection() -- Solo C
-    Bridge.update(0.5)
-    Room.movePlayer(100) -- D2=A
-    Room.movePlayer(-39) -- O verbraucht
-    Room.movePlayer(47) -- 240
-    Room.movePlayer(-22) -- D2=B, Player@218
-    -- CCW durch S_D1 (offen) zu R@60 und SOLO über R -> outer@60.
-    local _, r = Room.movePlayer(-158) -- 218 -> 60
-    check(r.blocked == false, "p7: CCW zu R läuft")
+    Room.movePlayer(-45)
+    Room.movePlayer(15) -- D1=A
+    Room.movePlayer(106)
+    Room.movePlayer(-15) -- O verbraucht, Player@193
+    -- CCW durch S_O + S_D2 (beide noch offen, D1=D2=A bis zum Crossing) zu D1
+    -- -> B; Sweep endet direkt am B-Dock (inner@63).
+    local _, r1 = Room.movePlayer(-130) -- 193 -> 63 (D1 CCW -> B)
+    check(r1.blocked == false, "p6: D1-CCW-Sweep läuft")
+    check(State.switchStates["D1"] == "B", "p6: D1=B (B wieder da)")
+    check(State.elementStates["B"] == true, "p6: Bridge B materialisiert")
+    check(State.elementStates["S_O"] == false, "p6: S_O zu (O-Zugang versiegelt)")
+    check(State.elementStates["S_FINAL_D1"] == false, "p6: S_FINAL_D1 zu")
+    check(approx(State.player.angle, 63, 0.5), "p6: Player inner@63 (B-Dock)")
     local res = Room.tryUseConnection()
-    check(res.used == true and res.kind == "bridge" and res.id == "R", "p7: Solo-Transit R (2.)")
+    check(res.used == true and res.kind == "bridge" and res.id == "B", "p6: Solo-Transit B (2.)")
     Bridge.update(0.5)
-    check(State.player.ring == "outer" and approx(State.player.angle, 60, 0.5),
-        "p7: Player outer@60 (RICHTIGE Seite von Baby/P2)")
+    check(State.player.ring == "outer" and approx(State.player.angle, 75, 0.5),
+        "p6: Player outer@75 (RICHTIGE Seite von Baby/P2)")
     check(State.baby ~= nil and State.baby.ring == "outer" and approx(State.baby.angle, 149, 1.0),
-        "p7: Baby weiterhin auf P2 (149)")
+        "p6: Baby weiterhin auf P2 (149)")
 end
 
--- --- Phase 8: Baby zu U, GEMEINSAM nach innen ------------------------------
+-- --- Phase 7: Baby P2 -> P3 (C verschwindet, D erscheint) ------------------
 do
     setup(Levels[8])
     Room.movePlayer(101.83)
-    Room.tryUseConnection() -- Solo A
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
+    Room.movePlayer(-49)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(80.83) -- Baby auf P2
-    Room.tryUseConnection() -- Solo C
+    Room.movePlayer(65.83)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(100) -- D2=A
-    Room.movePlayer(-39) -- O verbraucht
-    Room.movePlayer(47) -- 240
-    Room.movePlayer(-22) -- D2=B
-    Room.movePlayer(-158) -- inner@60
-    Room.tryUseConnection() -- Solo R (2.)
-    Bridge.update(0.5) -- outer@60
-    -- CW-Schub 149 -> 325 (U): Player@60 ist CCW des Babys.
-    local _, r1 = Room.movePlayer(256.83) -- 60 -> 316.83, Baby 149 -> 325 (U)
-    check(r1.blocked == false, "p8: Schub zu U läuft")
-    check(State.platePressed["P2"] == false, "p8: P2 FREI (Baby herunter)")
-    check(State.elementStates["C"] == false, "p8: Bridge C VERSCHWUNDEN")
+    Room.movePlayer(-45)
+    Room.movePlayer(15)
+    Room.movePlayer(106)
+    Room.movePlayer(-15)
+    Room.movePlayer(-130)
+    Room.tryUseConnection()
+    Bridge.update(0.5) -- outer@75
+    -- CW-Schub 149 -> 180 (P3): Player@75 ist CCW des Babys.
+    local _, r1 = Room.movePlayer(96.83) -- 75 -> 171.83, Baby 149 -> 180 (P3)
+    check(r1.blocked == false, "p7: Schub P2->P3 läuft")
+    check(State.platePressed["P2"] == false, "p7: P2 FREI (Baby herunter)")
+    check(State.elementStates["C"] == false, "p7: Bridge C VERSCHWUNDEN")
+    check(State.platePressed["P3"] == true, "p7: Baby EXAKT auf P3 -> gedrückt")
+    check(State.elementStates["D"] == true, "p7: Bridge D MATERIALISIERT (P3 aktiv)")
+    check(approx(State.baby.angle, 180, 1.0), "p7: Baby geparkt auf P3 (180)")
+    check(approx(State.player.angle, 171.83, 0.5), "p7: Player bei ~172")
+end
+
+-- --- Phase 8: D solo + D1 B->A + D2 A->B (FINALZUSTAND) --------------------
+do
+    setup(Levels[8])
+    Room.movePlayer(101.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(-49)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(65.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(-45)
+    Room.movePlayer(15)
+    Room.movePlayer(106)
+    Room.movePlayer(-15)
+    Room.movePlayer(-130)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(96.83) -- Baby auf P3, Player@171.83
+    -- SOLO über D@5: CCW zu D's outer-Dock (353), dann Transit.
+    local _, r1 = Room.movePlayer(-178.83) -- 171.83 -> 353
+    check(r1.blocked == false, "p8: CCW zu D läuft")
+    local res = Room.tryUseConnection()
+    check(res.used == true and res.kind == "bridge" and res.id == "D", "p8: Solo-Transit D")
+    Bridge.update(0.5)
+    check(State.player.ring == "inner" and approx(State.player.angle, 5, 0.5),
+        "p8: Player inner@5 (dritter Einstieg)")
+    -- D1 B -> A (CW): CW zu 87 (strikt vor dem Eintritt), dann CW durch [88,102].
+    local _, r2 = Room.movePlayer(82) -- 5 -> 87
+    check(r2.blocked == false, "p8: CW-Anlauf zu D1 läuft")
+    local _, r3 = Room.movePlayer(15) -- 87 -> 102 (D1 CW -> A)
+    check(r3.blocked == false, "p8: D1-CW-Sweep läuft")
+    check(State.switchStates["D1"] == "A", "p8: D1=A (Rückweg B geopfert)")
+    check(State.elementStates["B"] == false, "p8: Bridge B VERSCHWUNDEN")
+    check(State.elementStates["S_FI"] == true, "p8: S_FI offen (F entsperrt)")
+    check(State.elementStates["S_FINAL_D1"] == true, "p8: S_FINAL_D1 offen")
+    -- D2 A -> B (CCW): CCW von 102 durch 0/360 zu D2's Eintritt (232), dann
+    -- Austritt (218) -> D2=B. Der Weg [0,102]+[232,360] nutzt S_D2 (offen,
+    -- D2=A bis Crossing) und vermeidet S_FI (D1=A offen).
+    local _, r4 = Room.movePlayer(-244) -- 102 -> 218 (D2 CCW -> B)
+    check(r4.blocked == false, "p8: D2-CCW-Sweep läuft")
+    check(State.switchStates["D2"] == "B", "p8: D2=B (FINALZUSTAND)")
+    check(State.elementStates["S_D2"] == false, "p8: S_D2 zu (O-Zugang versiegelt)")
+    check(State.elementStates["S_FINAL_D2"] == true, "p8: S_FINAL_D2 offen")
+    check(State.elementStates["F"] == true, "p8: finale Verbindung F aktiv (D2=B)")
+    check(approx(State.player.angle, 218, 0.5), "p8: Player inner@218")
+end
+
+-- --- Phase 9: D zurück + Baby von P3 holen ---------------------------------
+do
+    setup(Levels[8])
+    Room.movePlayer(101.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(-49)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(65.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(-45)
+    Room.movePlayer(15)
+    Room.movePlayer(106)
+    Room.movePlayer(-15)
+    Room.movePlayer(-130)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(96.83)
+    Room.movePlayer(-178.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5) -- inner@5
+    Room.movePlayer(82)
+    Room.movePlayer(15)
+    Room.movePlayer(-244) -- D2=B, Player@218
+    -- SOLO über D zurück: CW von 218 zu 353 (vermeidet S_D2 [165,191]), Transit
+    -- (Landung an der Brückenachse outer@5).
+    local _, r1 = Room.movePlayer(135) -- 218 -> 353
+    check(r1.blocked == false, "p9: CW zu D läuft")
+    local res = Room.tryUseConnection()
+    check(res.used == true and res.kind == "bridge" and res.id == "D", "p9: Solo-Transit D (2.)")
+    Bridge.update(0.5)
+    check(State.player.ring == "outer" and approx(State.player.angle, 5, 0.5),
+        "p9: Player outer@5 (Landung an der Brückenachse)")
+    check(State.baby ~= nil and State.baby.ring == "outer" and approx(State.baby.angle, 180, 1.0),
+        "p9: Baby weiterhin auf P3 (180)")
+end
+
+-- --- Phase 10: Baby zu U, GEMEINSAM nach innen -----------------------------
+do
+    setup(Levels[8])
+    Room.movePlayer(101.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(-49)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(65.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(-45)
+    Room.movePlayer(15)
+    Room.movePlayer(106)
+    Room.movePlayer(-15)
+    Room.movePlayer(-130)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(96.83)
+    Room.movePlayer(-178.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(82)
+    Room.movePlayer(15)
+    Room.movePlayer(-244)
+    Room.movePlayer(135)
+    Room.tryUseConnection()
+    Bridge.update(0.5) -- outer@5
+    -- CW umrunden hinter das Baby (180), dann CW-Schub 180 -> 45 (U).
+    local _, r1 = Room.movePlayer(166.83) -- 5 -> 171.83 (hinter Baby)
+    check(r1.blocked == false, "p10: CW-Anlauf läuft")
+    local _, r2 = Room.movePlayer(225) -- 171.83 -> 36.83, Baby 180 -> 45 (U)
+    check(r2.blocked == false, "p10: Schub zu U läuft")
+    check(State.platePressed["P3"] == false, "p10: P3 FREI (Baby herunter)")
+    check(State.elementStates["D"] == false, "p10: Bridge D VERSCHWUNDEN")
+    check(approx(State.baby.angle, 45, 1.0), "p10: Baby an U (outer@45)")
     local res = Room.tryUseConnection()
     check(res.used == true and res.kind == "sharedBridge" and res.id == "U",
-        "p8: U GEMEINSAM benutzt (Baby voran)")
+        "p10: U GEMEINSAM benutzt (Baby voran)")
     Bridge.update(0.5)
-    check(State.player.ring == "inner" and approx(State.player.angle, 325, 0.5),
-        "p8: Player inner@325 (U-Transit)")
-    check(State.baby ~= nil and State.baby.ring == "inner" and approx(State.baby.angle, 315, 0.5),
-        "p8: Baby inner@315 (babyLandDir -1)")
-    check(State.elementStates["U"] == false, "p8: U NACH dem Shared-Transit verbraucht")
+    check(State.player.ring == "inner" and approx(State.player.angle, 45, 0.5),
+        "p10: Player inner@45 (U-Transit)")
+    check(State.baby ~= nil and State.baby.ring == "inner" and approx(State.baby.angle, 35, 0.5),
+        "p10: Baby inner@35 (babyLandDir -1)")
+    check(State.elementStates["U"] == false, "p10: U NACH dem Shared-Transit verbraucht")
 end
 
--- --- Phase 9: D1 CW -> A (R opfern, finalen Weg öffnen) --------------------
+-- --- Phase 11: Finaler Push über F zum Tor, gemeinsamer Exit ---------------
 do
     setup(Levels[8])
     Room.movePlayer(101.83)
-    Room.tryUseConnection() -- Solo A
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
+    Room.movePlayer(-49)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(80.83) -- Baby auf P2
-    Room.tryUseConnection() -- Solo C
+    Room.movePlayer(65.83)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(100) -- D2=A
-    Room.movePlayer(-39) -- O verbraucht
-    Room.movePlayer(47) -- 240
-    Room.movePlayer(-22) -- D2=B
-    Room.movePlayer(-158)
-    Room.tryUseConnection() -- Solo R (2.)
+    Room.movePlayer(-45)
+    Room.movePlayer(15)
+    Room.movePlayer(106)
+    Room.movePlayer(-15)
+    Room.movePlayer(-130)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(256.83) -- Baby zu U
-    Room.tryUseConnection() -- Shared U
-    Bridge.update(0.5) -- inner@325/Baby@315
-    -- D1@95 CW -> A: von inner@325 CW durch 360/0 zu D1 (Baby@315 bleibt hinten).
-    local _, r1 = Room.movePlayer(137) -- 325 -> 102 (D1 CW -> A)
-    check(r1.blocked == false, "p9: D1-CW-Sweep läuft")
-    check(State.switchStates["D1"] == "A", "p9: D1=A (FINALZUSTAND)")
-    check(State.elementStates["R"] == false, "p9: Bridge R VERSCHWUNDEN (Rückweg geopfert)")
-    check(State.elementStates["S_FINAL_A"] == true, "p9: S_FINAL_A offen (finaler Weg)")
-    check(State.elementStates["S_FI"] == true, "p9: S_FI offen (finale Bridge F entsperrt)")
-    check(State.switchStates["D2"] == "B", "p9: D2 bleibt B")
-    check(approx(State.player.angle, 102, 0.5), "p9: Player inner@102")
-end
-
--- --- Phase 10: Über F zum Tor, gemeinsamer Exit ----------------------------
-do
-    setup(Levels[8])
-    Room.movePlayer(101.83)
-    Room.tryUseConnection() -- Solo A
+    Room.movePlayer(96.83)
+    Room.movePlayer(-178.83)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
+    Room.movePlayer(82)
+    Room.movePlayer(15)
+    Room.movePlayer(-244)
+    Room.movePlayer(135)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(80.83) -- Baby auf P2
-    Room.tryUseConnection() -- Solo C
-    Bridge.update(0.5)
-    Room.movePlayer(100) -- D2=A
-    Room.movePlayer(-39) -- O verbraucht
-    Room.movePlayer(47) -- 240
-    Room.movePlayer(-22) -- D2=B
-    Room.movePlayer(-158)
-    Room.tryUseConnection() -- Solo R (2.)
-    Bridge.update(0.5)
-    Room.movePlayer(256.83) -- Baby zu U
-    Room.tryUseConnection() -- Shared U
-    Bridge.update(0.5) -- inner@325/315
-    Room.movePlayer(137) -- D1=A, Player@102
-    -- CCW zum Baby (inner@315) und CCW-Schub 315 -> 295 (F-Dock).
-    local _, r1 = Room.movePlayer(-158.83) -- 102 -> 303.17, Baby 315 -> 295 (F)
-    check(r1.blocked == false, "p10: CCW-Schub zu F läuft")
-    check(approx(State.baby.angle, 295, 1.0), "p10: Baby an F (inner@295)")
+    Room.movePlayer(166.83)
+    Room.movePlayer(225)
+    Room.tryUseConnection()
+    Bridge.update(0.5) -- inner@45/Baby@35
+    -- CCW-Schub 35 -> 295 (F-Dock): der Weg [0,35]+[295,360] vermeidet S_D2.
+    local _, r1 = Room.movePlayer(-101.83) -- 45 -> 303.17, Baby 35 -> 295 (F)
+    check(r1.blocked == false, "p11: CCW-Schub zu F läuft")
+    check(approx(State.baby.angle, 295, 1.0), "p11: Baby an F (inner@295)")
     local resF = Room.tryUseConnection()
-    check(resF.used == true and resF.kind == "sharedBridge" and resF.id == "F", "p10: Shared-Transit F")
+    check(resF.used == true and resF.kind == "sharedBridge" and resF.id == "F", "p11: Shared-Transit F")
     Bridge.update(0.5)
     check(State.player.ring == "outer" and approx(State.player.angle, 295, 0.5),
-        "p10: Player outer@295 (finale Verbindung)")
+        "p11: Player outer@295 (finale Verbindung)")
     check(State.baby ~= nil and State.baby.ring == "outer" and approx(State.baby.angle, 305, 0.5),
-        "p10: Baby outer@305 (babyLandDir +1)")
-    -- CW durch S_FINAL_O (O) und S_FINAL_A (D1) zum Tor T@355.
+        "p11: Baby outer@305 (babyLandDir +1)")
+    -- CW durch die drei finalen Shutter zum Tor T@355.
     local _, r2 = Room.movePlayer(51.83) -- 295 -> 346.83, Baby 305 -> 355 (Tor)
-    check(r2.blocked == false, "p10: finaler Ringweg läuft")
-    check(State.elementStates["S_FINAL_O"] == true, "p10: S_FINAL_O offen (O verbraucht)")
-    check(State.elementStates["S_FINAL_A"] == true, "p10: S_FINAL_A offen (D1=A)")
+    check(r2.blocked == false, "p11: finaler Ringweg läuft")
+    check(State.elementStates["S_FINAL_D1"] == true, "p11: S_FINAL_D1 offen (D1=A)")
+    check(State.elementStates["S_FINAL_D2"] == true, "p11: S_FINAL_D2 offen (D2=B)")
+    check(State.elementStates["S_FINAL_O"] == true, "p11: S_FINAL_O offen (O verbraucht)")
     check(Gate.isUsable(Levels[8].gate, "outer", State.player.angle) == true,
-        "p10: Tor nutzbar (FINALZUSTAND)")
+        "p11: Tor nutzbar (FINALZUSTAND)")
     local res = Room.tryUseConnection()
     check(res.used == true and res.kind == "gate" and res.crossing == true
-        and res.roomComplete == false, "p10: Kernbrücken-Transit")
+        and res.roomComplete == false, "p11: Kernbrücken-Transit")
     local gdone, gshared, _, gcenter = Bridge.update(0.5)
     check(gdone == true and gshared == true and gcenter == true,
-        "p10: gemeinsamer Center-Transit abgeschlossen (Level 8 fertig)")
+        "p11: gemeinsamer Center-Transit abgeschlossen (Level 8 fertig)")
 end
 
 -- --- O-FALSCH: CW-Überquerung verbraucht O NICHT ---------------------------
@@ -499,36 +623,82 @@ do
     Room.movePlayer(101.83) -- Baby auf P1
     Room.tryUseConnection() -- Solo A
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
+    Room.movePlayer(-49) -- D1=B, inner@63
+    Room.tryUseConnection() -- Solo B
     Bridge.update(0.5)
-    Room.movePlayer(80.83) -- 60 -> 140.83, Baby 130 -> 149 (P2)
+    Room.movePlayer(65.83) -- Baby auf P2
     Room.tryUseConnection() -- Solo C
     Bridge.update(0.5) -- inner@132
-    -- CW-Sweep 132 -> 232 überquert O CW (wirkungslos) und D2 CW -> A.
-    Room.movePlayer(100)
+    Room.movePlayer(-45) -- 132 -> 87
+    Room.movePlayer(15) -- D1=A, Player@102
+    -- CW-Sweep 102 -> 208 überquert O CW (wirkungslos).
+    local _, r = Room.movePlayer(106)
+    check(r.blocked == false, "o-falsch: CW-Zulauf läuft")
     check(State.switchStates["O"] == "A", "o-falsch: O bleibt A (CW wirkungslos)")
     check(State.consumedSwitches["O"] == nil, "o-falsch: O NICHT verbraucht (CW)")
     check(State.elementStates["S_FINAL_O"] == false, "o-falsch: S_FINAL_O bleibt zu")
     -- Erst die CCW-Überquerung verbraucht O.
-    Room.movePlayer(-39) -- O CCW -> B
+    Room.movePlayer(-15) -- 208 -> 193, O CCW -> B
     check(State.switchStates["O"] == "B", "o-falsch: O=B nach CCW")
     check(State.consumedSwitches["O"] == true, "o-falsch: O verbraucht (CCW)")
 end
 
--- --- ANTI-BYPASS: O ohne D1=B (S_D1 zu) unerreichbar -----------------------
+-- --- ANTI-BYPASS: O ohne P2 (C inaktiv) unerreichbar -----------------------
 do
     setup(Levels[8])
-    -- D1=A: S_D1 ist zu -> der Korridor zu O ist versiegelt.
-    Room.movePlayer(101.83) -- Baby auf P1
-    Room.tryUseConnection() -- Solo A
-    Bridge.update(0.5) -- inner@112 (D1 bleibt A)
-    local _, r1 = Room.movePlayer(30) -- 112 -> CW, prallt an S_D1 (137)
-    check(r1.blocked == true, "bypass-o: CW-Weg zu O PRALLT AN S_D1 (D1=A)")
-    check(approx(State.player.angle, 137, 1.0), "bypass-o: Player an S_D1-Kante (137)")
-    local _, r2 = Room.movePlayer(-30) -- 137 -> 107 (CCW, kein D1-Flip)
-    check(r2.blocked == false, "bypass-o: CCW zurück läuft")
-    check(State.switchStates["D1"] == "A", "bypass-o: D1 unverändert A")
+    -- Baby bleibt auf P1 (nicht P2): C bleibt inaktiv -> kein innerer Zugang.
+    local bC = nil
+    for _, b in ipairs(Levels[8].bridges) do
+        if b.id == "C" then bC = b end
+    end
+    Room.movePlayer(101.83) -- Baby auf P1, Player@121.83
+    check(State.elementStates["C"] == false, "bypass-o-p2: C INAKTIV (Baby auf P1)")
+    check(bC ~= nil and Bridge.isUsable(bC, 132) == false,
+        "bypass-o-p2: C nicht benutzbar (O unerreichbar)")
+end
+
+-- --- ANTI-BYPASS: O mit D2=B (S_D2 zu) unerreichbar ------------------------
+do
+    setup(Levels[8])
+    Room.movePlayer(101.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(-49) -- D1=B, inner@63
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(65.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5) -- inner@132
+    Room.movePlayer(-45)
+    Room.movePlayer(15) -- D1=A, Player@102
+    -- D2 zu früh auf B (bewusst): S_D2 schließt und versiegelt den O-Zulauf.
+    State.switchStates["D2"] = "B"
+    State.deriveElements()
+    Room.syncPhysicalShutters()
+    check(State.elementStates["S_D2"] == false, "bypass-o-d2: S_D2 zu (D2=B)")
+    -- Der Player müsste O erreichen, aber der O-Zulauf (102 -> O) ist durch
+    -- S_D2 versiegelt: CW von 102 prallt an S_D2 (165).
+    local _, r2 = Room.movePlayer(105) -- CW, prallt an S_D2@178 [165,191]
+    check(r2.blocked == true, "bypass-o-d2: CW PRALLT AN S_D2 (O unerreichbar)")
+    check(approx(State.player.angle, 165, 1.0), "bypass-o-d2: Player an S_D2-Kante (165)")
+    check(State.switchStates["O"] == "A", "bypass-o-d2: O bleibt A")
+end
+
+-- --- ANTI-BYPASS: O mit D1=B (S_O zu) unerreichbar -------------------------
+do
+    setup(Levels[8])
+    Room.movePlayer(101.83)
+    Room.tryUseConnection()
+    Bridge.update(0.5)
+    Room.movePlayer(-49) -- D1=B, inner@63
+    check(State.elementStates["S_O"] == false, "bypass-o-d1: S_O zu (D1=B)")
+    -- Der Player steht an D1's CW-Eintritt (102) bei D1=B: CW zu O prallt an S_O.
+    State.player.ring = "inner"
+    State.player.angle = 102
+    local _, r2 = Room.movePlayer(105) -- CW, prallt an S_O@150 [137,163]
+    check(r2.blocked == true, "bypass-o-d1: CW PRALLT AN S_O (O unerreichbar)")
+    check(approx(State.player.angle, 137, 1.0), "bypass-o-d1: Player an S_O-Kante (137)")
+    check(State.switchStates["O"] == "A", "bypass-o-d1: O bleibt A")
 end
 
 -- --- ANTI-BYPASS: F ist bis D1=A durch S_FI gesperrt -----------------------
@@ -539,46 +709,53 @@ do
         if b.id == "F" then bF = b end
     end
     check(bF ~= nil, "bypass-f: Bridge F gefunden")
-    check(State.elementStates["F"] == true, "bypass-f: F aktiv (D2=B)")
-    -- Bei D1=A ist S_FI offen -> F benutzbar. Der eigentliche Anti-Bypass:
-    -- nach D1=B ist S_FI zu -> F gesperrt (kein F-Bypass statt U).
-    check(Bridge.isUsable(bF, 295) == true, "bypass-f: F bei D1=A benutzbar (S_FI offen)")
-    -- Nach D1=B ist F gesperrt:
-    Room.movePlayer(101.83) -- Baby auf P1
-    Room.tryUseConnection() -- Solo A
+    -- Bei D2=A ist F inaktiv.
+    check(State.elementStates["F"] == false, "bypass-f: F INAKTIV (D2=A) am Start")
+    check(Bridge.isUsable(bF, 295) == false, "bypass-f: F nicht benutzbar (D2=A)")
+    -- Nach D1=B (bei D2=A) bleibt F inaktiv.
+    Room.movePlayer(101.83)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    check(Bridge.isUsable(bF, 295) == false, "bypass-f: F gesperrt (S_FI zu, D1=B)")
+    Room.movePlayer(-49) -- D1=B
+    check(State.elementStates["F"] == false, "bypass-f: F bleibt inaktiv (D2=A)")
+    check(Bridge.isUsable(bF, 295) == false, "bypass-f: F nicht benutzbar (D2=A)")
+    -- Selbst mit D2=B: solange D1=B ist S_FI zu -> F gesperrt (kein F-Bypass statt U).
+    State.switchStates["D2"] = "B"
+    State.deriveElements()
+    check(State.elementStates["F"] == true, "bypass-f: F aktiv (D2=B) — aber S_FI zu (D1=B)")
+    check(Bridge.isUsable(bF, 295) == false, "bypass-f: F GESPERRT (S_FI zu, D1=B)")
 end
 
 -- --- DIE FALLE: U zu früh (gemeinsam) = Sackgasse --------------------------
 do
     setup(Levels[8])
-    -- U ist frei: Player schiebt das Baby CW bis zur geschlossenen S_FINAL_O
-    -- (O nicht verbraucht) — das Baby steht dann in Shared-Reichweite von U.
-    local _, r = Room.movePlayer(500) -- CW bis S_FINAL_O, Baby@~324
-    check(r.blocked == true, "falle: CW-Schub PRALLT AN S_FINAL_O")
-    check(approx(State.player.angle, 315.97, 1.5), "falle: Player am U-Dock (~316)")
-    check(math.abs(Geometry.delta(State.baby.angle, 325)) < 15,
-        "falle: Baby in Shared-Reichweite von U")
+    -- U ist frei: Player setzt das Baby direkt in Shared-Reichweite von U
+    -- (frühe, scheinbar verführerische Benutzung).
+    State.player.ring = "outer"
+    State.player.angle = 36.83
+    State.baby.ring = "outer"
+    State.baby.angle = 45
     local res = Room.tryUseConnection()
     check(res.used == true and res.kind == "sharedBridge" and res.id == "U",
         "falle: U wird zu früh GEMEINSAM benutzt")
     Bridge.update(0.5)
-    check(State.player.ring == "inner" and approx(State.player.angle, 325, 0.5),
-        "falle: Player inner@325")
-    check(State.baby ~= nil and State.baby.ring == "inner" and approx(State.baby.angle, 315, 0.5),
-        "falle: Baby inner@315 (auch eingesperrt)")
+    check(State.player.ring == "inner" and approx(State.player.angle, 45, 0.5),
+        "falle: Player inner@45")
+    check(State.baby ~= nil and State.baby.ring == "inner" and approx(State.baby.angle, 35, 0.5),
+        "falle: Baby inner@35 (auch eingesperrt)")
     check(State.elementStates["U"] == false, "falle: U verbraucht — kein Rückweg")
     check(State.elementStates["S_FINAL_O"] == false, "falle: S_FINAL_O ZU (O wurde nie gesetzt)")
     check(Gate.isUsable(Levels[8].gate, "inner", State.player.angle) == false,
-        "falle: Tor NIE erreichbar (O fehlt, Tor ist auf dem Außenring)")
-    -- Der eingeschlossene Player prallt in BEIDEN Richtungen an geschlossenen
-    -- Blenden: CCW an S_D2 (268), CW an S_D1 (137).
-    local _, r2 = Room.movePlayer(-100) -- 325 -> CCW, prallt an S_D2
-    check(r2.blocked == true, "falle: CCW PRALLT AN geschlossener Blende")
-    local _, r3 = Room.movePlayer(400) -- CW, prallt an S_D1
-    check(r3.blocked == true, "falle: CW PRALLT AN geschlossener Blende")
+        "falle: Tor NIE erreichbar (Tor ist auf dem Außenring, F zu)")
+    -- Keine der Brücken ist mehr benutzbar: A/C/D (Platten frei), B (D1=A),
+    -- F (D2=A) — der eingeschlossene Player kommt nie mehr zum Tor.
+    local anyUsable = false
+    for _, b in ipairs(Levels[8].bridges) do
+        if b.id ~= "U" and Bridge.isUsable(b, State.player.angle) then
+            anyUsable = true
+        end
+    end
+    check(anyUsable == false, "falle: KEINE Brücke mehr benutzbar (Sackgasse)")
 end
 
 -- --- DIE FALLE: U zu früh (solo) = Sackgasse -------------------------------
@@ -586,48 +763,42 @@ do
     setup(Levels[8])
     -- Player allein an U (Baby manuell weit entfernt): SOLO über U.
     State.player.ring = "outer"
-    State.player.angle = 325
+    State.player.angle = 45
     State.baby.ring = "outer"
     State.baby.angle = 200
     local res = Room.tryUseConnection()
     check(res.used == true and res.kind == "bridge" and res.id == "U",
         "falle-solo: U SOLO benutzt (Baby zu weit)")
     Bridge.update(0.5)
-    check(State.player.ring == "inner" and approx(State.player.angle, 325, 0.5),
-        "falle-solo: Player ALLEIN inner@325")
+    check(State.player.ring == "inner" and approx(State.player.angle, 45, 0.5),
+        "falle-solo: Player ALLEIN inner@45")
     check(State.baby ~= nil and State.baby.ring == "outer",
         "falle-solo: Baby bleibt auf dem Außenring")
     check(State.elementStates["U"] == false, "falle-solo: U verbraucht")
     check(Gate.isUsable(Levels[8].gate, "inner", State.player.angle) == false,
         "falle-solo: Tor ohne Baby NIE erreichbar")
-    -- Der alleinige Player prallt in BEIDEN Richtungen an geschlossenen Blenden.
-    local _, r2 = Room.movePlayer(-100) -- CCW, prallt an S_D2
-    check(r2.blocked == true, "falle-solo: CCW PRALLT AN geschlossener Blende")
-    local _, r3 = Room.movePlayer(400) -- CW, prallt an S_D1
-    check(r3.blocked == true, "falle-solo: CW PRALLT AN geschlossener Blende")
 end
 
 -- --- ANTI-BYPASS: Tor vor dem FINALZUSTAND gesperrt ------------------------
 do
     setup(Levels[8])
-    -- D1=B: S_FINAL_A [347,13] ist zu und deckt das Tor T@355 direkt ab.
-    Room.movePlayer(101.83) -- Baby auf P1
-    Room.tryUseConnection() -- Solo A
+    -- Finalzustand = D1=A, D2=B, O verbraucht. Vorher ist mindestens ein
+    -- finaler Shutter zu: S_FINAL_O (O), S_FINAL_D1 (D1=B), S_FINAL_D2 (D2=A).
+    Room.movePlayer(101.83)
+    Room.tryUseConnection()
     Bridge.update(0.5)
-    Room.movePlayer(-52) -- D1=B
-    Room.tryUseConnection() -- Solo R
-    Bridge.update(0.5) -- outer@60
-    check(State.elementStates["S_FINAL_A"] == false, "bypass-final: S_FINAL_A zu (D1=B)")
+    Room.movePlayer(-49) -- D1=B
+    check(State.elementStates["S_FINAL_D1"] == false, "bypass-final: S_FINAL_D1 zu (D1=B)")
     check(Gate.isUsable(Levels[8].gate, "outer", 355) == false,
-        "bypass-final: Tor NICHT nutzbar (S_FINAL_A deckt T ab)")
+        "bypass-final: Tor NICHT nutzbar (finaler Shutter zu)")
     -- O nicht verbraucht: S_FINAL_O [327,353] blockiert den Zulauf zum Tor.
-    local _, rb = Room.movePlayer(500) -- CW bis zur geschlossenen S_FINAL_O
-    check(rb.blocked == true, "bypass-final: CW prallt an S_FINAL_O (O fehlt)")
-    check(approx(State.player.angle, 315.97, 1.5),
-        "bypass-final: Player am S_FINAL_O (O fehlt)")
+    check(State.elementStates["S_FINAL_O"] == false, "bypass-final: S_FINAL_O zu (O=A)")
+    -- D2=A: S_FINAL_D2 zu + F inaktiv.
+    check(State.elementStates["S_FINAL_D2"] == false, "bypass-final: S_FINAL_D2 zu (D2=A)")
+    check(State.elementStates["F"] == false, "bypass-final: F inaktiv (D2=A)")
 end
 
--- --- Undo: genau EIN Snapshot pro Frame trotz Schalter + Push ----------------
+-- --- Undo: genau EIN Snapshot pro Frame trotz Schalter + Push --------------
 do
     setup(Levels[8])
     Room.movePlayer(101.83) -- Push (Baby auf P1): genau 1 Undo-Eintrag
@@ -637,18 +808,20 @@ do
     Room.tryUseConnection() -- Solo A (keine oneShot-Brücke): kein Snapshot
     Bridge.update(0.5)
     check(Undo.count() == 1, "undo: Solo-Transit A = kein Snapshot")
-    Room.movePlayer(-52) -- D1 CCW -> B (Schalter): genau 1 Snapshot
+    Room.movePlayer(-49) -- D1 CCW -> B (Schalter): genau 1 Snapshot
     check(Undo.count() == 2, "undo: D1-Wechsel = genau 1 Snapshot")
-    Room.tryUseConnection() -- Solo R (R ist NICHT oneShot)
+    Room.tryUseConnection() -- Solo B (B ist NICHT oneShot)
     Bridge.update(0.5)
-    check(Undo.count() == 2, "undo: Solo-Transit R = kein Snapshot (R nicht oneShot)")
-    Room.movePlayer(80.83) -- Push (Baby auf P2): genau 1 Snapshot
+    check(Undo.count() == 2, "undo: Solo-Transit B = kein Snapshot (B nicht oneShot)")
+    Room.movePlayer(65.83) -- Push (Baby auf P2): genau 1 Snapshot
     check(Undo.count() == 3, "undo: Push auf P2 = genau 1 Snapshot")
     Room.tryUseConnection() -- Solo C (keine oneShot-Brücke): kein Snapshot
     Bridge.update(0.5)
     check(Undo.count() == 3, "undo: Solo-Transit C = kein Snapshot")
-    Room.movePlayer(100) -- D2 CW -> A (Schalter): genau 1 Snapshot
-    check(Undo.count() == 4, "undo: D2-Wechsel = genau 1 Snapshot")
+    Room.movePlayer(-45) -- CCW-Anlauf (kein Wechsel): kein Snapshot
+    check(Undo.count() == 3, "undo: CCW-Anlauf = kein Snapshot")
+    Room.movePlayer(15) -- D1 CW -> A (Schalter): genau 1 Snapshot
+    check(Undo.count() == 4, "undo: D1-Wechsel zurück = genau 1 Snapshot")
 end
 
 TestReport.room8 = { pass = pass, fail = fail }
