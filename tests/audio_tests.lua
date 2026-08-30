@@ -750,49 +750,38 @@ end
 -- --- Sounddesign-Erweiterung: LEVEL-7-Spezialübergang ----------------------
 do
     freshAudio()
-    -- pulse: 3 zeitversetzte Kern-Pulse, steigend.
-    Audio.notePhase7Phase("pulse", 7)
+    -- expand: dezente ansteigende Sog-Unterlage (der Haupt-Woosh läuft in
+    -- main.lua via playTransitionWoosh).
+    freshAudio()
+    Audio.notePhase7Phase("expand", 7)
     local sp = Audio.synths.special.calls
-    check(#sp == 3, "p7-pulse: 3 Pulse")
+    check(#sp == 1, "p7-expand: genau 1 Note (Sog-Unterlage)")
     local base = Audio.coreFrequency(7)
-    check(approx(sp[1].pitch, base * Config.audioP7Pulse1Mult, 1e-6), "p7-pulse: Puls 1 = base")
-    check(approx(sp[2].pitch, base * Config.audioP7Pulse2Mult, 1e-6), "p7-pulse: Puls 2 höher")
-    check(approx(sp[3].pitch, base * Config.audioP7Pulse3Mult, 1e-6), "p7-pulse: Puls 3 am höchsten")
-    check(sp[1].when == nil and sp[2].when ~= nil and sp[3].when ~= nil, "p7-pulse: zeitversetzt")
-    check(sp[3].when > sp[2].when, "p7-pulse: Puls 3 nach Puls 2")
-    check(sp[1].vol < sp[2].vol and sp[2].vol < sp[3].vol, "p7-pulse: jeder lauter")
+    check(approx(sp[1].pitch, base * Config.audioP7ExpandStart, 1e-6), "p7-expand: Start = base * 0.5")
+    check(approx(Audio.synths.special.freqMod.events[2].value,
+        base * Config.audioP7ExpandEnd - base * Config.audioP7ExpandStart, 1e-6),
+        "p7-expand: Glide aufwärts (Sog)")
 
-    -- collapse: Sine-Sweep base -> 38 Hz.
+    -- text: Stille (kurz, sauber, ruhig — kein Sound auf der ROOM-Anzeige).
     freshAudio()
-    Audio.notePhase7Phase("collapse", 7)
-    check(#Audio.synths.special.calls == 1, "p7-collapse: genau 1 Note")
-    check(Audio.synths.special.calls[1].pitch == base, "p7-collapse Start = base")
-    check(approx(Audio.synths.special.freqMod.events[2].value, Config.audioP7CollapseEnd - base, 1e-6),
-        "p7-collapse: Glide zum Punkt (38 Hz)")
-
-    -- explode: Noise + tiefer Impact + abfallender Saw-Sweep.
-    freshAudio()
-    Audio.notePhase7Phase("explode", 7)
-    check(#Audio.synths.movement.calls == 1, "p7-explode: 1 Noise-Impuls")
-    check(#Audio.synths.impact.calls == 1, "p7-explode: 1 tiefer Impact")
-    check(#Audio.synths.bridge.calls == 1, "p7-explode: 1 Frag-Sweep")
-    check(Audio.synths.bridge.freqMod.events[2].value < 0, "p7-explode: Frag-Sweep abfallend")
-
-    -- rebuild: ein klarer Sine-Puls (neuer Kern).
-    freshAudio()
-    Audio.notePhase7Phase("rebuild", 7)
-    check(#Audio.synths.special.calls == 1, "p7-rebuild: genau 1 Puls")
-    check(approx(Audio.synths.special.calls[1].pitch, base * Config.audioP7NewCoreMult, 1e-6),
-        "p7-rebuild: neuer Kern (base * 1.5)")
-
-    -- andere Phasen: kein Sound (rest/flash/dark sind still).
-    freshAudio()
-    Audio.notePhase7Phase("rest", 7)
-    Audio.notePhase7Phase("flash", 7)
-    Audio.notePhase7Phase("dark", 7)
+    Audio.notePhase7Phase("text", 7)
     check(#Audio.synths.special.calls == 0 and #Audio.synths.movement.calls == 0
         and #Audio.synths.impact.calls == 0 and #Audio.synths.bridge.calls == 0,
-        "p7: rest/flash/dark still (kein Sound)")
+        "p7-text: ROOM-Anzeige still (kein Sound)")
+
+    -- contract: kurzer, starker absteigender Sweep (Kollaps) + tiefer Impact.
+    freshAudio()
+    Audio.notePhase7Phase("contract", 7)
+    check(#Audio.synths.special.calls == 1, "p7-contract: genau 1 Sweep")
+    check(Audio.synths.special.freqMod.events[2].value < 0, "p7-contract: Sweep abfallend (kosmischer Kollaps)")
+    check(#Audio.synths.impact.calls == 1, "p7-contract: 1 tiefer Impact")
+
+    -- andere Phasen: kein Sound (rest ist still).
+    freshAudio()
+    Audio.notePhase7Phase("rest", 7)
+    check(#Audio.synths.special.calls == 0 and #Audio.synths.movement.calls == 0
+        and #Audio.synths.impact.calls == 0 and #Audio.synths.bridge.calls == 0,
+        "p7: rest still (kein Sound)")
 end
 
 -- --- Sounddesign-Erweiterung: finales Ende (letzter Raum) ------------------

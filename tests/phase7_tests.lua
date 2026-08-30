@@ -1,8 +1,10 @@
 -- Tests für source/ui/phase7.lua (Level-7-Spezialübergang: Ende der Lernphase
--- -> neue schwere Phase). Nur die Übergangslogik selbst (Phasen-Maschine,
--- Pulse, Kollaps, Fragmente, Wiederaufbau, Figuren-Exit, Tutorial-Sperre).
--- Keine Spielmechanik. Erwartet, dass die Module per import geladen wurden
--- (siehe tools/run_tests.ps1). Ergebnis wird in TestReport.phase7 gesammelt.
+-- -> neue schwere Phase, kosmische „Urknall“-Sequenz). Nur die Übergangs-
+-- logik selbst: Phasen-Maschine (rest -> expand -> text -> contract -> done),
+-- Expansions-/Kontraktions-Radius, Vollbild + „ROOM X / 10“, Verdeckung der
+-- Figuren, direkter Reveal. Keine Spielmechanik. Erwartet, dass die Module
+-- per import geladen wurden (siehe tools/run_tests.ps1). Ergebnis wird in
+-- TestReport.phase7 gesammelt.
 
 local pass = 0
 local fail = 0
@@ -43,150 +45,75 @@ local bt = { ring = Levels[8].rings[Levels[8].baby.start.ring], angle = Levels[8
 
 Phase7.start(8, pf, pt, bf, bt, 7)
 check(Phase7.isActive(), "Phase7: nach start aktiv")
-check(Phase7.phase == "rest", "Phase7: startet in rest (kurze Ruhe)")
+check(Phase7.phase == "rest", "Phase7: startet in rest (kurze Ruhe/Verdichtung)")
 check(Phase7.hidesFigures(), "Phase7: rest verdeckt Player+Baby")
 check(near(Phase7.fromCoreRadius, Config.coreRadius + 6 * Config.coreGrowthPerRoom), "Phase7: fromCoreRadius = Kern von Raum 7")
 check(near(Phase7.toCoreRadius, Config.coreRadius + 7 * Config.coreGrowthPerRoom), "Phase7: toCoreRadius = Kern von Raum 8")
-check(Phase7.outerR > Phase7.innerR, "Phase7: Explosions-Ringradien Außen > Innen")
-check(near(Phase7.outerR, Config.outerRadius), "Phase7: Außenring-Fragment-Start = 104")
-check(near(Phase7.innerR, Config.innerRadius), "Phase7: Innenring-Fragment-Start = 68")
+check(Phase7.coreRadius() == nil, "Phase7: in rest kein Übergangskreis (Kern atmet normal)")
 
--- --- Phasen-Maschine (rest -> pulse -> collapse -> flash -> explode -> dark
---     -> rebuild -> done) ----------------------------------------------------
+-- --- Phasen-Maschine (rest -> expand -> text -> contract -> done) ----------
 local event = Phase7.update(Config.phase7Rest)
-check(event == nil and Phase7.phase == "pulse", "Phase7: rest -> pulse (kein Event)")
-local pulseTotal = Config.phase7Pulse1Dur + Config.phase7Pulse2Dur + Config.phase7Pulse3Dur
-event = Phase7.update(pulseTotal)
-check(event == nil and Phase7.phase == "collapse", "Phase7: pulse -> collapse (kein Event)")
-event = Phase7.update(Config.phase7Collapse)
-check(event == nil and Phase7.phase == "flash", "Phase7: collapse -> flash (kein Event)")
-event = Phase7.update(Config.phase7Flash)
-check(event == nil and Phase7.phase == "explode", "Phase7: flash -> explode (kein Event)")
-event = Phase7.update(Config.phase7Explosion)
-check(event == "load" and Phase7.phase == "dark", "Phase7: explode -> dark mit Event 'load' (neuer Raum wird verdeckt geladen)")
-check(Phase7.hidesFigures(), "Phase7: dark verdeckt Player+Baby")
-event = Phase7.update(Config.phase7Dark)
-check(event == nil and Phase7.phase == "rebuild", "Phase7: dark -> rebuild (kein Event)")
-check(Phase7.hidesFigures(), "Phase7: rebuild vor Figuren-Exit verdeckt Player+Baby")
-event = Phase7.update(Config.phase7Rebuild)
-check(event == "done" and not Phase7.isActive(), "Phase7: rebuild -> done (Übergang beendet)")
+check(event == nil and Phase7.phase == "expand", "Phase7: rest -> expand (kein Event)")
+event = Phase7.update(Config.phase7Expand)
+check(event == "load" and Phase7.phase == "text", "Phase7: expand -> text mit Event 'load' (neuer Raum wird verdeckt geladen)")
+check(Phase7.hidesFigures(), "Phase7: text verdeckt Player+Baby")
+event = Phase7.update(Config.phase7TextHold)
+check(event == nil and Phase7.phase == "contract", "Phase7: text -> contract (kein Event)")
+event = Phase7.update(Config.phase7Contract)
+check(event == "done" and not Phase7.isActive(), "Phase7: contract -> done (direkter Reveal von Level 8)")
 
--- --- Pulse: drei Pulse, zunehmende Stärke, dritter schneller ---------------
+-- --- Expansion: langsames, gleichmäßiges Wachstum zum Vollbild -------------
 Phase7.reset()
 Phase7.start(8, pf, pt, bf, bt, 7)
-Phase7.update(Config.phase7Rest) -- -> pulse, t=0
-local base = Render.coreRadius(Render.currentRoomIndex) + Render.corePulseOffset()
--- Puls 1 (leicht): bei der Hälfte der Dauer ist sin(pi*0.5) = 1 -> Basis + Amp.
-Phase7.update(Config.phase7Pulse1Dur / 2)
-local peak1 = Phase7.coreRadius()
-check(near(peak1, base + Config.phase7Pulse1Amp, 0.5), "Puls 1: Peak = Basis + Amplitude (leicht)")
--- Puls 2 (stärker): an den Peak von Puls 2 springen.
-Phase7.update(Config.phase7Pulse1Dur / 2 + Config.phase7Pulse2Dur / 2)
-local peak2 = Phase7.coreRadius()
-check(near(peak2, base + Config.phase7Pulse2Amp, 0.5), "Puls 2: Peak = Basis + Amplitude (stärker)")
-check(peak2 > peak1, "Puls 2 ist stärker als Puls 1")
--- Puls 3 (deutlich stärker UND schneller): an den Peak von Puls 3 springen.
-Phase7.update(Config.phase7Pulse2Dur / 2 + Config.phase7Pulse3Dur / 2)
-local peak3 = Phase7.coreRadius()
-check(near(peak3, base + Config.phase7Pulse3Amp, 0.5), "Puls 3: Peak = Basis + Amplitude (deutlich stärker)")
-check(peak3 > peak2, "Puls 3 ist stärker als Puls 2")
-check(Config.phase7Pulse3Dur < Config.phase7Pulse2Dur, "Puls 3 ist schneller als Puls 2")
--- Zwischen den Pulsen (Puls-Ruhe am Sinus-Nullpunkt) = Basisradius.
+Phase7.update(Config.phase7Rest) -- -> expand, t=0
+local startR = Phase7.coreRadius()
+check(startR ~= nil and startR > Config.coreRadius, "Phase7: expand startet über dem Kernradius (nahtlos)")
+check(startR < Config.phase7CoverRadius, "Phase7: expand startet unter dem Vollbild")
+-- Mitte: Radius ist gewachsen, aber noch nicht am Vollbild.
+Phase7.update(Config.phase7Expand / 2)
+local midR = Phase7.coreRadius()
+check(midR > startR and midR < Config.phase7CoverRadius, "Phase7: expand wächst stetig (Mitte)")
+-- Ende: exakt die Vollbild-Abdeckung.
+Phase7.update(Config.phase7Expand / 2)
+check(near(Phase7.coreRadius(), Config.phase7CoverRadius, 0.5), "Phase7: expand füllt am Ende das komplette Bild")
+check(Phase7.hidesFigures(), "Phase7: expand verdeckt Player+Baby")
+
+-- --- ROOM-Text: Vollbild bleibt konstant (~2 s) ----------------------------
+Phase7.update(0)
+check(Phase7.phase == "text", "Phase7: text aktiv (Vollbild + ROOM-Anzeige)")
+check(near(Phase7.coreRadius(), Config.phase7CoverRadius, 0.001), "Phase7: text hält das volle Bild konstant")
+Phase7.update(Config.phase7TextHold / 2)
+check(Phase7.phase == "text", "Phase7: text hält ~2 s (ROOM 8 / 10)")
+
+-- --- Kontraktion: extrem schnelles Zusammenziehen zum Punkt ----------------
+Phase7.update(Config.phase7TextHold / 2) -- -> contract, t=0
+check(Phase7.phase == "contract", "Phase7: contract aktiv (schneller Kollaps)")
+local cStart = Phase7.coreRadius()
+check(near(cStart, Config.phase7CoverRadius, 0.001), "Phase7: contract startet am Vollbild")
+Phase7.update(Config.phase7Contract / 2)
+local cMid = Phase7.coreRadius()
+check(cMid < cStart and cMid > Config.phase7TinyPoint, "Phase7: contract schrumpft zum winzigen Punkt")
+-- Ganz am Ende (kurz vor dem Phasenwechsel, t²-beschleunigt) ist der Radius
+-- nahe dem winzigen Punkt.
+Phase7.update(Config.phase7Contract * 0.49)
+check(Phase7.phase == "contract", "Phase7: contract noch aktiv (kurz vor dem Ende)")
+check(Phase7.coreRadius() < 8, "Phase7: contract endet nahe dem winzigen Punkt")
+check(Config.phase7Contract < Config.phase7Expand, "Phase7: Kontraktion ist deutlich schneller als die Expansion")
+Phase7.update(Config.phase7Contract * 0.01) -- -> done
+check(not Phase7.isActive(), "Phase7: contract -> done (Übergang beendet)")
+
+-- --- Deterministisch (kein Zufall) ----------------------------------------
 Phase7.reset()
 Phase7.start(8, pf, pt, bf, bt, 7)
 Phase7.update(Config.phase7Rest)
-Phase7.update(Config.phase7Pulse1Dur * 0.001)
-check(near(Phase7.coreRadius(), base, 0.5), "Puls 1 startet am Basisradius (sin(0)=0)")
-
--- --- Kollaps: Kern zieht sich auf den winzigen Punkt zusammen --------------
-Phase7.update(Config.phase7Pulse1Dur * 0.999) -- fast ans Puls-Ende
-Phase7.update(Config.phase7Pulse2Dur + Config.phase7Pulse3Dur) -- -> collapse, t=0
-Phase7.update(Config.phase7Collapse / 2)
-local midCollapse = Phase7.coreRadius()
-check(midCollapse < base and midCollapse > Config.phase7TinyPoint, "Kollaps: Radius schrumpft zwischen Basis und winzigem Punkt")
--- Kurz vor dem Kollaps-Ende: Radius ist nahezu der winzige Punkt.
-Phase7.update(Config.phase7Collapse / 2 - 0.01)
-check(Phase7.coreRadius() < 8, "Kollaps: Radius nahe am winzigen weißen Punkt am Ende")
-Phase7.update(0.01) -- -> flash, t=0
-
--- --- Explosion: deterministische Fragmente (6-10, grobe Ringsegmente +
---     radiale Splitter) -----------------------------------------------------
-Phase7.update(Config.phase7Flash) -- -> explode
-check(#Phase7.fragments >= 6 and #Phase7.fragments <= 10, "Explosion: 6-10 Fragmente (" .. #Phase7.fragments .. ")")
-local arcCount, spikeCount = 0, 0
-for _, f in ipairs(Phase7.fragments) do
-    if f.kind == "arc" then
-        arcCount = arcCount + 1
-        check(f.startR >= Config.innerRadius - 0.5 and f.startR <= Config.outerRadius + 0.5, "Ringsegment startet auf der alten Ringgeometrie")
-        check(f.width >= 6 and f.width <= 8, "Ringsegment hat Bahnbreite")
-    else
-        spikeCount = spikeCount + 1
-        check(f.kind == "spike" and f.width == 3, "Radialer Splitter vorhanden")
-    end
-    check(f.angle >= 0 and f.angle < 360, "Fragment-Winkel in [0,360)")
-end
-check(arcCount >= 4 and spikeCount >= 2, "Explosion: grobe Ringsegmente + radiale Splitter gemischt")
--- Deterministisch: ein zweiter Start erzeugt identische Fragmente.
-local angles1 = {}
-for i, f in ipairs(Phase7.fragments) do angles1[i] = f.angle end
+Phase7.update(Config.phase7Expand / 3)
+local rA = Phase7.coreRadius()
 Phase7.reset()
 Phase7.start(8, pf, pt, bf, bt, 7)
-check(#Phase7.fragments == #angles1, "Explosion: Fragmentanzahl deterministisch")
-local deterministic = true
-for i, f in ipairs(Phase7.fragments) do
-    if math.abs(f.angle - angles1[i]) > 0.001 then deterministic = false end
-end
-check(deterministic, "Explosion: Fragment-Winkel deterministisch (kein Zufall)")
-
--- --- Wiederaufbau: Welt baut sich aus dem kleinen Kern auf -----------------
--- Phase für Phase bis rebuild vorrücken (jeder update-Aufruf vollzieht
--- höchstens EINEN Phasenwechsel — die elseif-Kette wird pro Aufruf nur einmal
--- durchlaufen, der Carryover ist subtraktiv).
 Phase7.update(Config.phase7Rest)
-Phase7.update(pulseTotal)
-Phase7.update(Config.phase7Collapse)
-Phase7.update(Config.phase7Flash)
-check(Phase7.phase == "explode", "Phase7: mitten in der Explosion (für Rebuild-Test)")
-Phase7.update(Config.phase7Explosion * 0.5)
-local loadEvent = Phase7.update(Config.phase7Explosion * 0.5)
-check(Phase7.phase == "dark", "Phase7: dark erreicht (Rebuild-Vorbereitung)")
--- main.lua lädt beim "load"-Event den neuen Raum (Raum 8) und setzt die
--- Kamera auf dessen Außenring (outer = 0) — erst dann ist der Zielradius der
--- Ringbahn 104.
-check(loadEvent == "load", "Phase7: dark liefert 'load' (verdeckter Raumwechsel)")
-Camera.init(Levels[8].rings.outer)
-Phase7.update(Config.phase7Dark)
-check(Phase7.phase == "rebuild", "Phase7: rebuild aktiv")
-check(near(Phase7.revealScale(), Config.phase7RebuildStartScale, 0.001), "Rebuild: Startskala = kleiner Kern")
-check(near(Phase7.exitProgress(), 0), "Rebuild: Exit-Fortschritt 0 am Start")
-check(Phase7.hidesFigures(), "Rebuild: Figuren noch verdeckt (Ringe bauen sich auf)")
--- Vor ExitStart (u=0.5 < 0.55): noch kein Figuren-Exit, Figuren verdeckt.
-Phase7.update(Config.phase7Rebuild * 0.5)
-check(near(Phase7.exitProgress(), 0) and Phase7.hidesFigures(), "Rebuild: vor ExitStart kein Figuren-Exit")
--- Ringe sind ab RebuildRingEnd (u=0.6) ausgebaut.
-Phase7.update(Config.phase7Rebuild * (Config.phase7RebuildRingEnd - 0.5))
-check(near(Phase7.revealScale(), 1, 0.01), "Rebuild: Ringe sind ab RebuildRingEnd ausgebaut (Skala ~1)")
--- Exit: Figuren kommen radial aus dem Kern heraus (Baby leicht voraus, eigene
--- Winkel).
-Phase7.update(Config.phase7Rebuild * (0.7 - Config.phase7RebuildRingEnd))
-local p1x, p1y, p1a = Phase7.playerPosAndAngle()
-local b1x, b1y, b1a = Phase7.babyPosAndAngle()
-local p1r = math.sqrt((p1x - Config.centerX) ^ 2 + (p1y - Config.centerY) ^ 2)
-local b1r = math.sqrt((b1x - Config.centerX) ^ 2 + (b1y - Config.centerY) ^ 2)
-check(p1r > Config.coreRadius + 6 * Config.coreGrowthPerRoom and p1r < Config.outerRadius,
-    "Player-Exit: mittlerer Radius zwischen Kern und Ringbahn")
-check(b1r > Config.coreRadius + 6 * Config.coreGrowthPerRoom and b1r < Config.outerRadius,
-    "Baby-Exit: mittlerer Radius zwischen Kern und Ringbahn")
-check(near(p1a, 135, 0.001), "Player-Exit: eigener Winkel bleibt (135)")
-check(near(b1a, 145, 0.001), "Baby-Exit: eigener Winkel bleibt (145)")
-check(not Phase7.hidesFigures(), "Rebuild: beim Figuren-Exit werden Figuren gezeichnet")
--- Ende: sauberes Landing auf der Ringbahn (Radius 104 = Startring Raum 8).
-Phase7.update(Config.phase7Rebuild * (0.999 - 0.7))
-local p2x, p2y, p2a = Phase7.playerPosAndAngle()
-local p2r = math.sqrt((p2x - Config.centerX) ^ 2 + (p2y - Config.centerY) ^ 2)
-check(near(p2r, Config.outerRadius, 1), "Player: sauberes Landing auf der Ringbahn (Radius ~104)")
-check(near(p2a, 135, 0.001), "Player: Landewinkel = eigener Winkel (kein Snap)")
-check(Phase7.exitProgress() > 0.99, "Rebuild: Exit-Fortschritt ~1 am Ende")
+Phase7.update(Config.phase7Expand / 3)
+local rB = Phase7.coreRadius()
+check(near(rA, rB, 0.001), "Phase7: Expansionsradius deterministisch (kein Zufall)")
 
 -- --- Tutorial-Sperre ab Phase 2 --------------------------------------------
 check(Tutorial.enabledForRoom(7) == true, "Tutorial: Raum 7 erlaubt Tutorials (Lernphase)")
@@ -194,12 +121,11 @@ check(Tutorial.enabledForRoom(8) == false, "Tutorial: Raum 8 = KEINE Tutorials (
 check(Tutorial.enabledForRoom(9) == false, "Tutorial: ab Raum 8 keine Tutorials")
 check(Tutorial.maybeStartFocus(8) == false, "Tutorial: kein Mechanik-Fokus in Raum 8")
 check(Tutorial.checkElementTriggers(8, nil) == false, "Tutorial: keine Kontext-Erklärungen in Raum 8")
-check(Tutorial.checkLevelHints(8) == nil, "Tutorial: keine Level-1-Hinweise in Raum 8")
+check(Tutorial.checkLevelHints(8) == false, "Tutorial: keine Level-1-Hinweise in Raum 8")
 
 -- --- Aufräumen --------------------------------------------------------------
 Phase7.reset()
 check(not Phase7.isActive(), "Phase7: reset beendet den Übergang")
-check(near(Phase7.revealScale(), 1), "Phase7: revealScale inaktiv = 1 (kein Skalieren)")
 Camera.clearRevealScale()
 Camera.clearRestartScale()
 

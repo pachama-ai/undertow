@@ -556,29 +556,23 @@ Config = {
     audioRestartRebuildDuration = 0.34, -- = restartExpandDuration (synchron)
     audioRestartRebuildVolume = 0.45,
 
-    -- LEVEL-7-SPEZIALÜBERGANG: akustisch besonders, aber minimalistisch.
-    audioP7Pulse1Mult = 1.0,            -- 3 Kern-Pulse vor der Explosion (Multiplikator auf Kern-Frequenz)
-    audioP7Pulse2Mult = 1.35,
-    audioP7Pulse3Mult = 1.8,
-    audioP7PulseVol1 = 0.3,             -- jeder etwas stärker/dichter
-    audioP7PulseVol2 = 0.4,
-    audioP7PulseVol3 = 0.55,
-    audioP7CollapseEnd = 38,            -- Kollaps zum Punkt: Sine-Sweep bis 38 Hz
-    audioP7CollapseDuration = 0.20,
-    audioP7CollapseVolume = 0.5,
-    audioP7ExplosionNoiseFreq = 300,    -- EXPLOSION: grober Noise-Impuls (kein Boom)
-    audioP7ExplosionNoiseLen = 0.10,
-    audioP7ExplosionNoiseVolume = 0.5,
-    audioP7ExplosionImpactFreq = 45,    -- tiefer Sine-Impact (Hz)
-    audioP7ExplosionImpactDuration = 0.20,
-    audioP7ExplosionImpactVolume = 0.6,
-    audioP7FragStart = 220,             -- Ringfragmente fliegen: abfallender Saw-Sweep
-    audioP7FragEnd = 70,
-    audioP7FragDuration = 0.35,
-    audioP7FragVolume = 0.4,
-    audioP7NewCoreMult = 1.5,           -- neuer Kern erscheint: ein klarer Sine-Puls
-    audioP7NewCoreDuration = 0.5,
-    audioP7NewCoreVolume = 0.45,
+    -- LEVEL-7-SPEZIALÜBERGANG (Audio, „Urknall“): während der langsamen
+    -- Expansion ein ansteigendes, raumhaftes Sog-Gefühl (der Haupt-Woosh
+    -- läuft in main.lua via playTransitionWoosh; hier die dezente Sog-
+    -- Unterlage über die gesamte Expansionsdauer). Beim schnellen Zusammen-
+    -- ziehen ein kurzer, starker Rückzugs-/Collapse-Sound (absteigender
+    -- Sweep + tiefer Impact). Die ROOM-Anzeige bleibt still.
+    audioP7ExpandStart = 0.5,        -- Expansion: Sog-Unterlage startet halb so tief wie der Kern
+    audioP7ExpandEnd = 1.15,         -- ... und steigt leicht über die Kernfrequenz
+    audioP7ExpandDuration = 2.0,     -- Sog-Unterlage begleitet die komplette Expansion (= phase7Expand)
+    audioP7ExpandVolume = 0.18,      -- dezent (der Woosh trägt den Hauptanteil)
+    audioP7ContractStart = 1.3,      -- Kontraktion: Sweep startet über der Kernfrequenz
+    audioP7ContractEnd = 30,         -- ... und fällt extrem tief ab (kosmischer Kollaps)
+    audioP7ContractDuration = 0.28,  -- kurzer, prägnanter Rückzug (0.25-0.30 s)
+    audioP7ContractVolume = 0.5,
+    audioP7ContractImpactFreq = 40,  -- tiefer Impact beim Kollaps (Hz)
+    audioP7ContractImpactDuration = 0.15,
+    audioP7ContractImpactVolume = 0.6,
 
     -- FINALES ENDE (letzter Raum): kein Victory-Fanfare — System kommt zur Ruhe.
     audioFinalTransDuration = 1.8,      -- etwas längerer finaler Room-Transition-Sweep (s)
@@ -797,42 +791,28 @@ Config = {
     tutorialMarkerLen = 10,          -- Fokusrahmen: Eckmarker-Länge (px)
     tutorialMarkerPulseSpeed = 2.5,  -- Puls-Geschwindigkeit (rad/s, dezent, kein Blinken)
 
-    -- Level-7-Spezialübergang (neue Phase, ui/phase7.lua): nach Abschluss von
-    -- LEVEL 7 läuft KEIN normaler Levelwechsel (kein Center-Wipe) — die
-    -- Einführung ist vorbei. Stattdessen eine rein geometrische Sequenz ohne
-    -- Text: Player+Baby sind bereits hinter dem Kern (Center-Bridge) ->
-    -- kurze Ruhe -> der Kern pulsiert DREIMAL (leicht/stärker/deutlich
-    -- stärker und schneller) -> Kollaps auf einen winzigen weißen Punkt im
-    -- exakten Mittelpunkt (200,120) -> 2-3 Frames Pause -> geometrische
-    -- EXPLOSION (grobe weiße Ringsegmente der alten Ringgeometrie + radiale
-    -- Splitter fliegen radial aus dem Bild, keine Partikel/Glow/Funken) ->
-    -- nur dunkler Hintergrund (hier wird die neue Phase verdeckt geladen) ->
-    -- ein kleiner Kern erscheint, aus ihm baut sich die neue Spielwelt auf
-    -- (weiterhin exakt 2 aktive Ringbahnen, kein dritter Ring) -> Player+Baby
-    -- kommen gemeinsam radial aus dem Kern heraus (Baby leicht voraus) und
-    -- landen sauber auf der Ringbahn -> sofort Gameplay, KEINE Tutorials.
-    screenWidth = 400,               -- Bildschirmbreite (Explosions-/Dunkel-Fläche)
+    -- Level-7-Spezialübergang (neue Phase, ui/phase7.lua, „Urknall“): nach
+    -- Abschluss von LEVEL 7 läuft KEIN normaler Levelwechsel (kein Center-
+    -- Wipe) — die Einführung ist vorbei. Stattdessen eine rein geometrische
+    -- kosmische Sequenz: Player+Baby sind bereits hinter dem Kern (Center-
+    -- Bridge) -> kurze Ruhe/Verdichtung -> LANGSAME, gleichmäßige EXPANSION
+    -- des hellen Kerns (wird immer heller und verdrängt die Ringelemente),
+    -- bis er die komplette Spielfläche füllt -> auf dem vollen weißen Bild
+    -- zentriert „ROOM X / 10“ für ~2 s (hier wird die neue Phase verdeckt
+    -- geladen) -> SCHNELLE Kontraktion zurück zum winzigen Punkt (wie ein
+    -- Urknall in umgekehrter Richtung) -> DIREKTER REVEAL von Level 8 (kein
+    -- Nachblenden, kein Wiederaufbau; Player/Baby stehen direkt korrekt an
+    -- ihren Startpositionen) -> sofort Gameplay, KEINE Tutorials.
+    screenWidth = 400,               -- Bildschirmbreite (Overlay-Fläche)
     screenHeight = 240,              -- Bildschirmhöhe
     phaseTwoStartRoom = 8,           -- ab diesem Raum beginnt Phase 2 (keine Tutorial-Overlays mehr)
-    phase7Rest = 0.30,               -- kurze Ruhe am Kern (0.25-0.35 s)
-    phase7Pulse1Dur = 0.34,          -- Puls 1: leicht
-    phase7Pulse1Amp = 6,             -- Puls 1: Amplitude (px)
-    phase7Pulse2Dur = 0.34,          -- Puls 2: stärker
-    phase7Pulse2Amp = 13,
-    phase7Pulse3Dur = 0.24,          -- Puls 3: deutlich stärker UND schneller
-    phase7Pulse3Amp = 24,
-    phase7Collapse = 0.28,           -- Kern zieht sich sehr schnell auf einen winzigen Punkt zusammen
+    phase7Rest = 0.30,               -- kurze Ruhe/Verdichtung am Kern (0.25-0.35 s)
+    phase7Expand = 2.0,              -- LANGSAME Expansion des Kerns bis zum Vollbild (gleichmäßig, unaufhaltsam)
+    phase7TextHold = 2.0,            -- „ROOM X / 10“ auf dem vollen weißen Bild (exakt ~2 s)
+    phase7Contract = 0.30,           -- SCHNELLE Kontraktion zurück zum winzigen Punkt (deutlich schneller als die Expansion)
     phase7TinyPoint = 2,             -- Radius des winzigen weißen Punkts (px)
-    phase7Flash = 0.06,              -- Pause mit dem winzigen Punkt (50 fps -> 3 Frames)
-    phase7Explosion = 0.40,          -- Explosion: Fragmente fliegen aus dem Bild (0.35-0.45 s)
-    phase7ExplosionFragments = 8,    -- grobe Ringsegmente + radiale Splitter (6-10)
-    phase7ExplosionClear = 280,      -- Fragment-Radius, ab dem alles sicher außerhalb des Bildes ist
-    phase7ExplosionDot = 0.25,       -- zentraler Explosionspunkt bleibt bis zu diesem Anteil sichtbar
-    phase7Dark = 0.12,               -- nur dunkler Hintergrund (0.1-0.15 s); hier wird Phase 2 geladen
-    phase7Rebuild = 0.90,            -- neue Welt baut sich aus dem Kern auf
-    phase7RebuildStartScale = 0.12,  -- Startskala des Wiederaufbaus (kleiner Kern)
-    phase7RebuildRingEnd = 0.60,     -- Ringe sind ab diesem Anteil ausgebaut
-    phase7RebuildExitStart = 0.55,   -- Figuren-Exit beginnt (Anteil Rebuild)
+    phase7ExpandDitherStart = 50,    -- Start-Deckkraft des hellen Kerns (Kern-Optik) — wächst auf 100%
+    phase7CoverRadius = 250,         -- Expansions-Zielradius: bedeckt den Screen komplett (Eckabstand ~233)
 
     audioCompletionFreq = 55,      -- tiefer Systemimpuls (Hz)
     audioCompletionDuration = 0.25,-- Impulsdauer (s)

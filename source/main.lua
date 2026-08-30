@@ -317,10 +317,10 @@ local function handleConnectionResult(result, fromCenterTransit)
             roomTransition.captureFigures(pf, pt, bf, bt)
             if nextIndex == config.phaseTwoStartRoom then
                 -- LEVEL-7-SPEZIALÜBERGANG (Ende der Lernphase): statt des
-                -- normalen Center-Wipes läuft die geometrische Sequenz
-                -- (Ruhe -> 3 Kern-Pulse -> Kollaps zum Punkt -> Explosion ->
-                -- Dunkel -> Wiederaufbau der neuen Phase aus dem Kern). Der
-                -- neue Raum wird erst in der dunklen Phase verdeckt geladen
+                -- normalen Center-Wipes läuft die kosmische Sequenz
+                -- (Ruhe -> langsame Expansion zum Vollbild -> „ROOM X / 10“ ->
+                -- schnelle Kontraktion -> direkter Reveal). Der neue Raum
+                -- wird in der Vollbild-Phase verdeckt geladen
                 -- (phase7.update liefert "load").
                 phase7.start(nextIndex, pf, pt, bf, bt, currentRoomIndex)
                 -- Audio (MIXING): Kernpuls während der Sequenz pausieren;
@@ -677,55 +677,48 @@ local function updateRoom()
     -- nächsten Raum genau EINMAL (startRoom); die neuen Puzzleobjekte bauen
     -- sich ab dann gestaffelt auf. Am Ende der Transition wird der Übergang
     -- beendet und die Eingabe im selben Frame freigegeben.
-    -- LEVEL-7-SPEZIALÜBERGANG (Ende der Lernphase -> Phase 2): der Kern
-    -- pulsiert dreimal, kollabiert zu einem winzigen Punkt, explodiert
-    -- geometrisch (Fragmente fliegen aus dem Bild), dann nur Dunkelheit — in
-    -- dieser Phase wird der neue Raum (Phase 2) verdeckt geladen
-    -- (phase7.update liefert "load") — und aus einem kleinen Kern baut sich
-    -- die neue Spielwelt auf (Camera.revealScale skaliert alle Radien).
-    -- Player/Baby kommen am Ende gemeinsam radial aus dem Kern heraus und
-    -- landen auf der Ringbahn. Sofort danach Gameplay (keine Tutorials, keine
-    -- zusätzliche Ruhe). Währenddessen ist die gesamte Gameplay-Eingabe
+    -- LEVEL-7-SPEZIALÜBERGANG (Ende der Lernphase -> Phase 2, „Urknall“):
+    -- kurze Ruhe/Verdichtung -> LANGSAME Expansion des hellen Kerns bis zum
+    -- kompletten Vollbild -> zentriert „ROOM X / 10“ für ~2 s (in dieser
+    -- Phase wird der neue Raum (Phase 2) verdeckt geladen; phase7.update
+    -- liefert "load") -> SCHNELLE Kontraktion zurück zum winzigen Punkt ->
+    -- DIREKTER REVEAL von Level 8 (kein Wiederaufbau, keine Figuren-Exit-
+    -- Animation). Player/Baby stehen beim Reveal direkt korrekt an ihren
+    -- Level-8-Startpositionen. Sofort danach Gameplay (keine Tutorials,
+    -- keine zusätzliche Ruhe). Währenddessen ist die gesamte Gameplay-Eingabe
     -- gesperrt (Kurbel, D-Pad, A, B, DockAssist).
     if phase7.isActive() then
         local event = phase7.update(FRAME_DT)
         local p7phase = phase7.phase
         if event == "load" then
-            -- Dunkle Phase: den neuen Raum KOMPLETT verdeckt laden — kein
-            -- Teleport/Respawn/Geometry-Snap sichtbar.
+            -- VOLLBILD-Phase: den neuen Raum (Phase 2) KOMPLETT verdeckt
+            -- laden — kein Teleport/Respawn/Geometry-Snap sichtbar. Player/
+            -- Baby stehen danach an ihren Level-8-Startpositionen (startRoom);
+            -- KEIN applyTransitionPosition (kein Figuren-Carry — der direkte
+            -- Reveal gibt den fertigen Raum einfach frei).
             currentRoomIndex = pendingRoomIndex
             pendingRoomIndex = nil
             startRoom(currentRoomIndex)
-            -- Startposition des neuen Levels = tatsächliche Position aus dem
-            -- vorherigen Level (Winkel; Ring = Levelstart-Ring bei "center").
-            applyTransitionPosition()
-            -- Kamera auf den neuen Außenring stabil setzen (kein Ring-Morph;
-            -- der Wiederaufbau skaliert über revealScale).
+            -- Kamera auf den neuen Außenring stabil setzen (kein Ring-Morph).
             camera.init(state.room.rings.outer)
         elseif event == "done" then
             phase7.reset()
             camera.clearRevealScale()
         end
-        -- Audio (EDGE-Trigger): Phasenwechsel melden — 3 Pulse, Kollaps,
-        -- Explosion, neuer Kern (kein Sound pro Frame).
+        -- Audio (EDGE-Trigger): Phasenwechsel melden — Expansion, ROOM-Text,
+        -- Kontraktion (kein Sound pro Frame).
         if p7phase ~= nil and p7phase ~= lastP7Phase then
             lastP7Phase = p7phase
             audio.notePhase7Phase(p7phase, currentRoomIndex)
-            -- LEVELÜBERGANG-WOOSH (ROOM 7 -> 8): auch beim Spezialübergang
-            -- muss der Wechsel eindeutig hörbar sein. Der Woosh startet beim
-            -- WIEDERAUFBAU der neuen Phase — nach der Explosion, kein Stapeln
-            -- mit dem Explosions-Sound.
-            if p7phase == "rebuild" then
+            -- LEVELÜBERGANG-WOOSH (ROOM 7 -> 8): beim Start der langsamen
+            -- EXPANSION läuft der breite Luft-/Sog-Woosh als „ansteigendes,
+            -- raumhaftes Wusch“ mit der wachsenden Welle mit (genau EIN Woosh).
+            if p7phase == "expand" then
                 audio.playTransitionWoosh()
             end
         end
         if not phase7.isActive() then
             lastP7Phase = nil
-        end
-        -- Wiederaufbau: Kamera-Skala jeden Frame an den Core-Wachstum anpassen
-        -- (die neue Welt baut sich aus dem kleinen Kern heraus auf).
-        if phase7.isActive() and phase7.phase == "rebuild" then
-            camera.setRevealScale(phase7.revealScale())
         end
         render.noteShutterBlocked(false)
         render.noteBabyBlocked(false)

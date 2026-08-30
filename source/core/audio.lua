@@ -387,38 +387,25 @@ end
 function Audio.notePhase7Phase(phase, roomIndex)
     if not inited then return end
     local base = Audio.coreFrequency(roomIndex or 7)
-    local t0 = snd.getCurrentTime()
-    if phase == "pulse" then
-        -- 3 Kern-Pulse: jeder etwas höher/dichter/stärker, der letzte deutlich.
-        specialSynth:playNote(base * config.audioP7Pulse1Mult, config.audioP7PulseVol1, config.phase7Pulse1Dur)
-        specialSynth:playNote(base * config.audioP7Pulse2Mult, config.audioP7PulseVol2, config.phase7Pulse2Dur, t0 + config.phase7Pulse1Dur)
-        specialSynth:playNote(base * config.audioP7Pulse3Mult, config.audioP7PulseVol3, config.phase7Pulse3Dur, t0 + config.phase7Pulse1Dur + config.phase7Pulse2Dur)
-    elseif phase == "collapse" then
-        -- Kern zieht sich zum Punkt: Sine-Sweep base -> 38 Hz.
+    if phase == "expand" then
+        -- LANGSAME EXPANSION: dezente, ansteigende Sog-Unterlage über die
+        -- gesamte Expansionsdauer (raumhaftes Wusch/Sog). Der Haupt-Woosh
+        -- läuft zusätzlich in main.lua (playTransitionWoosh).
         glideNote(specialSynth, specialGlide,
-            base, config.audioP7CollapseEnd,
-            config.audioP7CollapseDuration, config.audioP7CollapseVolume)
-    elseif phase == "explode" then
-        -- KEINE klassische Explosion: grober Noise-Impuls + tiefer Sine-Impact
-        -- + abfallender Saw-Sweep (Ringfragmente fliegen).
-        movementSynth:playNote(
-            config.audioP7ExplosionNoiseFreq,
-            config.audioP7ExplosionNoiseVolume,
-            config.audioP7ExplosionNoiseLen)
+            base * config.audioP7ExpandStart, base * config.audioP7ExpandEnd,
+            config.audioP7ExpandDuration, config.audioP7ExpandVolume)
+    elseif phase == "contract" then
+        -- SCHNELLER KOSMISCHER KOLLAPS: kurzer, starker absteigender Sweep
+        -- (Urknall in umgekehrter Richtung) + tiefer Impact.
+        glideNote(specialSynth, specialGlide,
+            base * config.audioP7ContractStart, config.audioP7ContractEnd,
+            config.audioP7ContractDuration, config.audioP7ContractVolume)
         impactSynth:playNote(
-            config.audioP7ExplosionImpactFreq,
-            config.audioP7ExplosionImpactVolume,
-            config.audioP7ExplosionImpactDuration)
-        glideNote(bridgeSynth, bridgeGlide,
-            config.audioP7FragStart, config.audioP7FragEnd,
-            config.audioP7FragDuration, config.audioP7FragVolume)
-    elseif phase == "rebuild" then
-        -- Neuer Kern erscheint: ein einzelner klarer Sine-Puls — neue Phase.
-        specialSynth:playNote(
-            base * config.audioP7NewCoreMult,
-            config.audioP7NewCoreVolume,
-            config.audioP7NewCoreDuration)
+            config.audioP7ContractImpactFreq,
+            config.audioP7ContractImpactVolume,
+            config.audioP7ContractImpactDuration)
     end
+    -- "text": Stille (kurz, sauber, ruhig — kein Sound auf der ROOM-Anzeige).
 end
 
 -- --- FINALES ENDE (letzter Raum) ------------------------------------------
