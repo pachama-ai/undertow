@@ -109,11 +109,11 @@ Levels = {
     -- Puzzle): KEINE künstliche Startposition — Player und Baby kommen aus
     -- Level 2 (ENTRY = Level-2-Tor @135: Player äußerer Ring @135, Baby @145,
     -- Baby liegt CW vor dem Player -> PUSH_DIRECTION = CW). Alle Objekte sind
-    -- relativ zu ENTRY platziert (P = ENTRY+50).
+    -- relativ zu ENTRY platziert (P = ENTRY+105).
     --
     -- DREI ZU KOMBINIERENDE TEILE (mittel-leicht bis mittel):
     --   1) BABY PARKEN: Das Baby wird mit wenigen bewussten Pushes CW auf die
-    --      Druckplatte P (outer@185) geschoben und dort GEHALTEN. P öffnet S1
+    --      Druckplatte P (outer@240) geschoben und dort GEHALTEN. P öffnet S1
     --      (outer@290) — der einzige Zugang zur Brücke A (outer/inner@290,
     --      Dock liegt im S1-Bogen) führt also durch den geöffneten S1. Die
     --      Plattenposition ist zugleich der räumliche Bezugspunkt: Player
@@ -175,17 +175,20 @@ Levels = {
             -- den inneren Ring (Baby bleibt auf P). Dock liegt im S1-Bogen.
             { id="A", angle=290, free=true },
             -- Brücke B@340 (äußere/innere Seite): Rückweg des Players auf die
-            -- ANDERE Babyseite (outer@340 > Baby@185) + finaler gemeinsamer
+            -- ANDERE Babyseite (outer@340 > Baby@240) + finaler gemeinsamer
             -- Transit. Dock liegt im S2-Bogen (nur mit D=richtig erreichbar).
             { id="B", angle=340, free=true },
         },
 
-        -- Druckplatte P (outer@185 = ENTRY+50, momentan): gedrückt, solange
-        -- Player ODER Baby auf dem äußeren Ring im Druckbereich um 185° steht
+        -- Druckplatte P (outer@240 = ENTRY+105, momentan): gedrückt, solange
+        -- Player ODER Baby auf dem äußeren Ring im Druckbereich um 240° steht
         -- (das geparkte Baby hält sie). Steuert die Blende S1 (outer@290).
         -- Kein Rasten: sobald niemand mehr draufsteht, schließt S1 wieder.
+        -- Position bewusst auf der LINKEN Ringseite (240°): bei eingeblendeter
+        -- Tutorial-Infoleiste (schwarzer Balken unten, Trennlinie bei y=200)
+        -- bleibt die gesamte Platte samt weißer Umrandung oberhalb sichtbar.
         plates = {
-            { id="P", ring="outer", angle=185, on="S1" },
+            { id="P", ring="outer", angle=240, on="S1" },
         },
 
         -- Tor inner@135 (= ENTRY, gleiche logische Position wie Level 2):

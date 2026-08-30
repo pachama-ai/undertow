@@ -502,11 +502,11 @@ Config = {
 
     -- Druckplatte: eigenes eindeutiges Feedback (leichtes Einrasten).
     audioPlateOnStart = 170,            -- PLATE ON: Triangle steigt (Hz)
-    audioPlateOnEnd = 210,
+    audioPlateOnEnd = 220,
     audioPlateLen = 0.08,               -- kurz (s)
-    audioPlateOnVolume = 0.32,
+    audioPlateOnVolume = 0.35,
     audioPlateOffStart = 210,           -- PLATE OFF: Triangle fällt (Hz)
-    audioPlateOffEnd = 160,
+    audioPlateOffEnd = 150,
     audioPlateOffVolume = 0.26,
 
     -- Einmalschalter: unterscheidet sich vom Doppelschalter („verriegelt").

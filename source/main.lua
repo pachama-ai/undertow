@@ -711,6 +711,13 @@ local function updateRoom()
         if p7phase ~= nil and p7phase ~= lastP7Phase then
             lastP7Phase = p7phase
             audio.notePhase7Phase(p7phase, currentRoomIndex)
+            -- LEVELÜBERGANG-WOOSH (ROOM 7 -> 8): auch beim Spezialübergang
+            -- muss der Wechsel eindeutig hörbar sein. Der Woosh startet beim
+            -- WIEDERAUFBAU der neuen Phase — nach der Explosion, kein Stapeln
+            -- mit dem Explosions-Sound.
+            if p7phase == "rebuild" then
+                audio.playTransitionWoosh()
+            end
         end
         if not phase7.isActive() then
             lastP7Phase = nil

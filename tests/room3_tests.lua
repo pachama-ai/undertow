@@ -2,7 +2,7 @@
 --   KEINE künstliche Startposition — ENTRY = Level-2-Ausgang (Player äußerer
 --   Ring @135, Baby @145: Baby CW vor dem Player -> PUSH_DIRECTION = CW).
 --   EXAKT ZWEI aktive Ringe: outer (5), inner (4) + Mittelpunkt.
---   ÄUSSERER RING: P (Platte @185), S1 (@290, von P, deckt Bridge A), Bridge
+--   ÄUSSERER RING: P (Platte @240), S1 (@290, von P, deckt Bridge A), Bridge
 --     A (outer<->inner@290), Bridge B (inner<->outer@340).
 --   INNERER RING: D (Doppelschalter @310; onB=S2, state A), S2 (@340, deckt
 --     Bridge B@340), Tor T@135.
@@ -69,8 +69,8 @@ do
         "daten: S2 inner@340 (von D — deckt Bridge B)")
     check(#r3.plates == 1, "daten: genau 1 Druckplatte")
     check(r3.plates[1].id == "P" and r3.plates[1].ring == "outer"
-        and approx(r3.plates[1].angle, 185) and r3.plates[1].on == "S1",
-        "daten: P outer@185 steuert S1 (Baby-Parkplatz)")
+        and approx(r3.plates[1].angle, 240) and r3.plates[1].on == "S1",
+        "daten: P outer@240 steuert S1 (Baby-Parkplatz)")
     check(#r3.bridges == 2, "daten: genau 2 Brücken (A + B)")
     local bA, bB
     for _, b in ipairs(r3.bridges) do
@@ -103,12 +103,12 @@ end
 -- --- Druckplatte: Baby auf P -> S1 offen -----------------------------------
 do
     setup(Levels[3])
-    local _, r = Room.movePlayer(41.83) -- 135 -> ~177, Baby 145 -> 185 (P@185)
+    local _, r = Room.movePlayer(96.83) -- 135 -> ~232, Baby 145 -> 240 (P@240)
     check(r.blocked == false, "platte: Schub läuft")
     check(State.platePressed["P"] == true, "platte: Baby auf P -> gedrückt")
     check(State.elementStates["S1"] == true, "platte: S1 offen (P aktiv)")
-    check(approx(State.player.angle, 176.83, 0.5), "platte: Player bei ~177")
-    check(approx(State.baby.angle, 185, 1.0), "platte: Baby geparkt auf P (185)")
+    check(approx(State.player.angle, 231.83, 0.5), "platte: Player bei ~232")
+    check(approx(State.baby.angle, 240, 1.0), "platte: Baby geparkt auf P (240)")
 end
 
 -- --- S1 blockiert Zugang zu Bridge A, bis das Baby auf P steht -------------
@@ -122,10 +122,10 @@ do
     check(res1.used == false, "s1: Bridge A nicht nutzbar (CCW)")
     -- Mit Baby auf P: S1 offen, Player erreicht Bridge A und geht SOLO.
     setup(Levels[3])
-    Room.movePlayer(41.83) -- Baby auf P@185, S1 offen
+    Room.movePlayer(96.83) -- Baby auf P@240, S1 offen
     -- Der Player geht CCW um den Ring (CW würde das Baby von P schieben)
     -- und erreicht Bridge A@290 durch die offene S1.
-    local _, r2 = Room.movePlayer(-246.83) -- ~177 -> 290 CCW (durch S1)
+    local _, r2 = Room.movePlayer(-301.83) -- ~232 -> 290 CCW (durch S1)
     check(r2.blocked == false, "s1: Player passiert S1")
     check(approx(State.player.angle, 290, 1), "s1: Player an Bridge A")
     check(State.platePressed["P"] == true, "s1: Baby bleibt auf P")
@@ -185,19 +185,19 @@ end
 -- --- BABY RECOVERY (Push-only) + gemeinsamer Rücktransit -------------------
 do
     setup(Levels[3])
-    -- Zustand nach Bridge B: Player outer@340, Baby geparkt auf P (185).
+    -- Zustand nach Bridge B: Player outer@340, Baby geparkt auf P (240).
     -- Player steht CW vom Baby -> schiebt es CCW (um den Ring) zurück zur
     -- Bridge B@340.
     State.player.ring = "outer"
     State.player.angle = 340
     State.baby.ring = "outer"
-    State.baby.angle = 185
+    State.baby.angle = 240
     State.setSwitch("D", "B") -- S2 offen (wie nach der richtigen Wahl)
     State.deriveElements()
     Room.syncPhysicalShutters()
-    check(State.player.angle > State.baby.angle, "recovery: Player CW vom Baby (340 > 185)")
+    check(State.player.angle > State.baby.angle, "recovery: Player CW vom Baby (340 > 240)")
     check(State.platePressed["P"] == true, "recovery: Baby hält P")
-    local _, r = Room.movePlayer(-351.83) -- Player 340 -> ~348, Baby 185 -> ~340
+    local _, r = Room.movePlayer(-351.83) -- Player 340 -> ~348, Baby 240 -> ~340
     check(r.blocked == false, "recovery: CCW-Schub läuft (kein Ziehen)")
     check(approx(State.player.angle, 348.17, 1), "recovery: Player bei ~348")
     check(approx(State.baby.angle, 340, 1), "recovery: Baby an Bridge B (340)")
