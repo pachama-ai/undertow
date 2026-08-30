@@ -502,12 +502,15 @@ Config = {
 
     -- Druckplatte: eigenes eindeutiges Feedback (leichtes Einrasten).
     audioPlateOnStart = 170,            -- PLATE ON: Triangle steigt (Hz)
-    audioPlateOnEnd = 220,
-    audioPlateLen = 0.08,               -- kurz (s)
-    audioPlateOnVolume = 0.35,
-    audioPlateOffStart = 210,           -- PLATE OFF: Triangle fällt (Hz)
+    audioPlateOnEnd = 230,
+    audioPlateLen = 0.10,               -- kurz, aber deutlich (s)
+    audioPlateOnVolume = 0.60,          -- DEUTLICH hörbar (Ziel: sofort wahrnehmen)
+    audioPlateTickFreq = 330,           -- kleiner Square-Tick am ON-Anfang (Druckpunkt, Hz)
+    audioPlateTickLen = 0.03,
+    audioPlateTickVolume = 0.30,
+    audioPlateOffStart = 220,           -- PLATE OFF: Triangle fällt (Hz)
     audioPlateOffEnd = 150,
-    audioPlateOffVolume = 0.26,
+    audioPlateOffVolume = 0.50,
 
     -- Einmalschalter: unterscheidet sich vom Doppelschalter („verriegelt").
     audioOneShotNote1 = 74,             -- Square-Snap MIDI 74 -> 67 (zweistufig)
@@ -588,13 +591,17 @@ Config = {
     -- sehr kurzer Noise-Einsatz (Luft). Läuft exakt mit dem Wachsen des Kreises
     -- (roomWipeGrow 0.35 s) und klingt auf dem vollständig weißen Bildschirm aus
     -- (Release). Genau EIN Woosh pro Übergang; KEIN zweiter Woosh beim Cut.
-    audioWooshStart = 120,              -- Saw-Sweep Start (Hz, tief)
-    audioWooshEnd = 420,                -- Saw-Sweep Ende (Hz, höher)
-    audioWooshDuration = 0.55,          -- Sweep-Dauer (s; gewünscht 0.45-0.70)
-    audioWooshVolume = 0.65,            -- deutlich, aber weich (gewünscht 0.55-0.75)
-    audioWooshNoiseFreq = 400,          -- Noise-Layer (Hz; bei Noise ohne Tonhöhe)
+    audioWooshStart = 80,               -- SOG-Sweep Start (Hz, tief — der Core zieht ein)
+    audioWooshEnd = 210,                -- SOG-Sweep Ende (Hz, kurzer Anstieg, nicht schrill)
+    audioWooshDuration = 0.70,          -- Sweep-Dauer (s; 0.6-0.9)
+    audioWooshVolume = 0.70,            -- deutlich, aber weich
+    audioWooshNoiseFreq = 400,          -- Noise-Textur (Hz; bei Noise ohne Tonhöhe)
     audioWooshNoiseLen = 0.12,          -- Noise sehr kurz eingeblendet (s)
-    audioWooshNoiseVolume = 0.3,        -- Luft-Anteil, leise
+    audioWooshNoiseVolume = 0.12,       -- sehr wenig Textur (nur für die Haptik)
+    audioWooshImpulseFreq = 70,         -- tiefer Abschlussimpuls (Sine, Hz)
+    audioWooshImpulseDelay = 0.52,      -- kurz vor dem Ausklingen (s)
+    audioWooshImpulseDuration = 0.28,   -- langer tiefer Ausklang (s)
+    audioWooshImpulseVolume = 0.50,     -- deutlich, nicht schrill
 
     -- Menü (Titelbildschirm): ruhig, klar, 1-Bit — großer dicker Ring mittig
     -- (Zentrum = Spielwelt-Zentrum, fest verankert auf 200,120), der sich beim

@@ -818,38 +818,43 @@ do
     check(sp[1].vol == Config.audioFinalSettleVolume, "final-settle Volume")
 end
 
--- --- Sounddesign-Erweiterung: LEVELÜBERGANG-WOOSH -------------------------
+-- --- Sounddesign-Erweiterung: LEVELÜBERGANG-SOG ---------------------------
 do
     freshAudio()
     Audio.playTransitionWoosh()
-    -- Luft-Schicht: ein sehr kurzer Noise-Einsatz auf der Movement-Stimme.
+    -- Textur-Schicht: ein sehr kurzer, leiser Noise-Einsatz (nur Haptik).
     local m = Audio.synths.movement.calls
-    check(#m == 1, "woosh: genau 1 Noise-Einsatz")
-    check(m[1].pitch == Config.audioWooshNoiseFreq, "woosh: Noise-Frequenz")
-    check(m[1].len == Config.audioWooshNoiseLen, "woosh: Noise sehr kurz")
-    check(m[1].len < Config.audioWooshDuration, "woosh: Noise kürzer als Sweep (kurz einblenden)")
-    check(m[1].vol == Config.audioWooshNoiseVolume, "woosh: Noise leise (Luft)")
-    -- Energie-Schicht: ein breiter Saw-Sweep auf der Woosh-Stimme.
+    check(#m == 1, "sog: genau 1 Noise-Textur")
+    check(m[1].pitch == Config.audioWooshNoiseFreq, "sog: Noise-Frequenz")
+    check(m[1].len == Config.audioWooshNoiseLen, "sog: Noise sehr kurz")
+    check(m[1].len < Config.audioWooshDuration, "sog: Noise kürzer als Sweep")
+    check(m[1].vol == Config.audioWooshNoiseVolume, "sog: Noise sehr leise (Textur)")
+    -- Energie-Schicht: ein breiter Triangle-Sweep auf der Woosh-Stimme.
     local w = Audio.synths.woosh.calls
-    check(#w == 1, "woosh: genau 1 Saw-Note")
-    check(Audio.synths.woosh.waveform == sndConst.kWaveSawtooth, "woosh: Sawtooth-Waveform")
-    check(w[1].pitch == Config.audioWooshStart, "woosh: Sweep-Start (tief, 120)")
-    check(w[1].len == Config.audioWooshDuration, "woosh: Sweep-Dauer")
-    check(w[1].vol == Config.audioWooshVolume, "woosh: Volume")
+    check(#w == 1, "sog: genau 1 Triangle-Note")
+    check(Audio.synths.woosh.waveform == sndConst.kWaveTriangle, "sog: Triangle-Waveform")
+    check(w[1].pitch == Config.audioWooshStart, "sog: Sweep-Start (tief, 80)")
+    check(w[1].len == Config.audioWooshDuration, "sog: Sweep-Dauer")
+    check(w[1].vol == Config.audioWooshVolume, "sog: Volume")
     check(Audio.synths.woosh.freqMod ~= nil and #Audio.synths.woosh.freqMod.events == 2,
-        "woosh: Glide gesetzt")
+        "sog: Glide gesetzt")
     check(Audio.synths.woosh.freqMod.events[2].value == Config.audioWooshEnd - Config.audioWooshStart,
-        "woosh: Sweep aufwärts (tief -> höher)")
-    -- Charakter: breit/weich — Dauer in 0.45-0.70 s, Volume in 0.55-0.75.
-    check(Config.audioWooshDuration >= 0.45 and Config.audioWooshDuration <= 0.70,
-        "woosh: Dauer 0.45-0.70 s")
-    check(Config.audioWooshVolume >= 0.55 and Config.audioWooshVolume <= 0.75,
-        "woosh: Volume 0.55-0.75")
-    -- KEINE Explosion: kein Impact/kein Boom auf der Impact-Stimme.
-    check(#Audio.synths.impact.calls == 0, "woosh: kein Explosions-Impact")
-    -- genau 1 Aufruf = genau 1 Woosh (kein Frame-Spam).
+        "sog: Sweep aufwärts (tief -> kurz höher)")
+    -- Charakter: tiefer SOG — Dauer 0.60-0.90 s, Volume deutlich, nicht schrill.
+    check(Config.audioWooshDuration >= 0.60 and Config.audioWooshDuration <= 0.90,
+        "sog: Dauer 0.60-0.90 s")
+    check(Config.audioWooshVolume >= 0.55 and Config.audioWooshVolume <= 0.80,
+        "sog: Volume 0.55-0.80")
+    -- Tiefer Abschlussimpuls (Sine): genau EIN kurzer, tiefer Impuls auf der
+    -- Impact-Stimme (kein Explosions-Boom, nur das „Einziehen" des Cores).
+    check(#Audio.synths.impact.calls == 1, "sog: genau 1 Abschlussimpuls (Sine)")
+    check(Audio.synths.impact.calls[1].pitch == Config.audioWooshImpulseFreq,
+        "sog: Abschlussimpuls tief (70 Hz)")
+    check(Audio.synths.impact.calls[1].when == Config.audioWooshImpulseDelay,
+        "sog: Impuls kurz vor dem Ausklingen")
+    -- genau 1 Aufruf = genau 1 SOG (kein Frame-Spam).
     Audio.playTransitionWoosh()
-    check(#Audio.synths.woosh.calls == 2, "woosh: 2 Aufrufe = 2 Wooshes (kein Spam)")
+    check(#Audio.synths.woosh.calls == 2, "sog: 2 Aufrufe = 2 SOGs (kein Spam)")
 end
 
 -- --- Sounddesign-Erweiterung: Mixing (Core-Hold) ---------------------------

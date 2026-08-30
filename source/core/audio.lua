@@ -124,9 +124,10 @@ function Audio.init(soundAPI)
     specialGlide = snd.controlsignal.new()
     specialSynth:setFrequencyMod(specialGlide)
 
-    -- LEVELÜBERGANG-WOOSH: breiter weicher Saw-Sweep, langsames Ausklingen
-    -- (Release 0.25) — klingt auf dem vollständig weißen Bildschirm aus.
-    wooshSynth = snd.synth.new(snd.kWaveSawtooth)
+    -- LEVELÜBERGANG-SOG: weicher Triangle-Sweep tief -> kurz höher + tiefer
+    -- Abschlussimpuls (Sine) — der Core zieht den Raum ein. Kein Wind, kein
+    -- klassischer Whoosh, keine Explosion.
+    wooshSynth = snd.synth.new(snd.kWaveTriangle)
     wooshSynth:setADSR(0.01, 0.06, 0.8, 0.25)
     wooshGlide = snd.controlsignal.new()
     wooshSynth:setFrequencyMod(wooshGlide)
@@ -266,9 +267,15 @@ function Audio.playMenuFillImpulse()
 end
 
 -- --- Druckplatte ----------------------------------------------------------
--- PLATE ON: Triangle steigt 170->210 Hz (leichtes mechanisches Einrasten).
+-- PLATE ON: kleiner mechanischer Square-Tick (Druckpunkt) + Triangle steigt
+-- 170->230 Hz (deutlich hörbar — man hört sofort, dass die Platte aktiviert
+-- wurde).
 function Audio.playPlateOn()
     if not inited then return end
+    switchSynth:playNote(
+        config.audioPlateTickFreq,
+        config.audioPlateTickVolume,
+        config.audioPlateTickLen)
     glideNote(toneSynth, toneGlide,
         config.audioPlateOnStart, config.audioPlateOnEnd,
         config.audioPlateLen, config.audioPlateOnVolume)
@@ -540,23 +547,24 @@ function Audio.playRoomTransition()
         config.audioRoomTransDuration)
 end
 
--- --- LEVELÜBERGANG-WOOSH (normaler Center-Wipe) ----------------------------
--- Der große WEISSE Kreis wächst über den Bildschirm — dieses breite, weiche
--- Luft-/Energie-Woosh läuft exakt mit dem Wachsen mit (Main triggert ihn beim
--- Start des Wipe-Grows) und klingt auf dem vollständig weißen Bildschirm aus
--- (Sustain + langes Release der Woosh-Stimme). KEINE Explosion, kein Boom.
--- Zwei Schichten: sehr kurzer Noise-Einsatz (Luft) + Saw-Sweep 120 -> 420 Hz.
--- Genau EIN Woosh pro Übergang; beim Cut gibt es KEINEN zweiten Woosh.
+-- --- LEVELÜBERGANG-SOG (normaler Center-Wipe) -----------------------------
+-- Der große WEISSE Kreis wächst über den Bildschirm — dieser tiefe, mecha-
+-- nische/energetische SOG läuft exakt mit dem Wachsen mit und klingt auf dem
+-- vollständig weißen Bildschirm sauber aus (der Core zieht den Raum ein).
+-- KEIN Wind, KEIN klassischer Whoosh, KEINE Explosion, kein Arcade-Jingle.
+-- Drei Schichten: sehr leiser Noise-Einsatz (Textur) + Triangle-Sweep
+-- tief (80 Hz) -> kurz höher (210 Hz) + tiefer Sine-Abschlussimpuls.
+-- Genau EIN SOG pro Übergang; während der ROOM-X-Anzeige herrscht Ruhe.
 function Audio.playTransitionWoosh()
     if not inited then return end
     local t0 = snd.getCurrentTime()
-    -- Luft-Schicht: sehr kurz eingeblendetes Noise („Kreis bläst auf").
+    -- Textur-Schicht: sehr kurzer, leiser Noise-Einsatz (nur Haptik).
     movementSynth:playNote(
         config.audioWooshNoiseFreq,
         config.audioWooshNoiseVolume,
         config.audioWooshNoiseLen,
         t0)
-    -- Energie-Schicht: breiter Saw-Sweep tief -> höher über die volle Dauer.
+    -- Energie-Schicht: breiter Triangle-Sweep tief -> kurz höher (SOG).
     wooshGlide:clearEvents()
     wooshGlide:addEvent(0, 0, true)
     wooshGlide:addEvent(config.audioWooshDuration,
@@ -565,6 +573,13 @@ function Audio.playTransitionWoosh()
         config.audioWooshStart,
         config.audioWooshVolume,
         config.audioWooshDuration)
+    -- Tiefer Abschlussimpuls (Sine): der Core schließt den Raum — kurz vor
+    -- dem Ausklingen auf dem weißen Bildschirm.
+    impactSynth:playNote(
+        config.audioWooshImpulseFreq,
+        config.audioWooshImpulseVolume,
+        config.audioWooshImpulseDuration,
+        t0 + config.audioWooshImpulseDelay)
 end
 
 -- --- Baby-Sounds (Begleiter) ---------------------------------------------
