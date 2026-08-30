@@ -1,0 +1,10 @@
+build/
+build_screenshots/
+build_screenshots_before/
+build_screenshots_after/
+build_montage/
+*.pdx/
+.DS_Store
+Thumbs.db
+luacats/
+.sentry-native/

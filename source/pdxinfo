@@ -1,0 +1,7 @@
+name=Ringe
+author=Selina
+description=Ein ruhiges Logikspiel aus konzentrischen Ringen.
+bundleID=com.selina.ringe
+version=0.1
+buildNumber=1
+imagePath=images/launcher
