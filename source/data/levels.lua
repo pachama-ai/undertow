@@ -729,22 +729,28 @@ Levels = {
     --     Bridge B materialisiert. Player SOLO über B zurück auf den Außenring
     --     (outer@75) — auf die RICHTIGE Seite von Baby/P2.
     --   PHASE 7: Player holt Baby von P2 (C verschwindet) und schiebt es CW
-    --     zur DRITTEN Druckplatte P3 (outer@180). P3 aktiv -> Bridge D@5
-    --     materialisiert sich (der dritte, weit entfernte Solo-Einstieg).
-    --   PHASE 8: Player SOLO über D auf den inneren Ring (inner@5). D1 B -> A
-    --     (CW): S_FI + S_FINAL_D1 öffnen, B verschwindet ENDGÜLTIG für den
-    --     Lösungsweg (Rückweg geopfert). D2 A -> B (CCW): S_D2 schließt (O-Zu-
-    --     gang zu), S_FINAL_D2 + die finale Verbindung F@295 öffnen.
-    --   PHASE 9: Player SOLO über D zurück auf den Außenring (outer@353) und
-    --     holt das Baby von P3 (D verschwindet).
+    --     zur DRITTEN Druckplatte P3 (outer@180). P3 aktiv -> Bridge D@220
+    --     materialisiert sich (der spätere EXIT / Rückweg).
+    --   PHASE 8: EINSTIEG ÜBER B (B ist aktiv, weil D1=B): Player SOLO über B
+    --     auf den inneren Ring (inner@75). D1 B -> A (CW): S_FI + S_FINAL_D1
+    --     öffnen, B verschwindet ENDGÜLTIG für den Lösungsweg (Rückweg
+    --     geopfert — der Einstieg war der letzte B-Gebrauch). D2 A -> B (CCW):
+    --     S_D2 schließt (O-Zugang zu), S_FINAL_D2 + die finale Verbindung
+    --     F@295 öffnen. Player endet inner@233 (freier Abschnitt [191,233]
+    --     zwischen S_D2 [165,191] und D2 [233,247]).
+    --   PHASE 9: Player SOLO über D (inneres Dock @220, auf DEMSELBEN freien
+    --     Ringabschnitt wie der Player nach D2=B) zurück auf den Außenring
+    --     (outer@220) — OHNE einen Schalter erneut zu überqueren (D1=A und
+    --     D2=B bleiben unverändert) — und holt das Baby von P3 (D verschwindet).
     --   PHASE 10: Player schiebt Baby zur EINMAL-BRÜCKE U (outer@45). U JETZT
     --     GEMEINSAM benutzen -> beide auf den inneren Ring (inner@45/Baby@35),
     --     U verschwindet erst NACH dem vollständigen Shared-Transit.
-    --   PHASE 11: FINALER PUSH: Player+Baby über die finale Verbindung F
-    --     (D2=B, inner@295) auf den Außenring (outer@295/Baby@305), dann CW
-    --     durch die drei finalen Shutter S_FINAL_D1 (D1=A), S_FINAL_D2 (D2=B)
-    --     und S_FINAL_O (O verbraucht) zum Tor T (outer@355) -> gemeinsamer
-    --     Kernbrücken-Transit -> EXIT.
+    --   PHASE 11: FINALER PUSH: Tor T liegt auf dem INNEREN Ring (inner@355).
+    --     Nach dem U-Transit (inner@45/Baby@35) schiebt der Player das Baby
+    --     gegen den Uhrzeigersinn direkt zum Tor (Player inner@5, Baby
+    --     inner@~357; vermeidet S_D2 [165,191], S_FI [282,308] ist bei D1=A
+    --     offen) -> gemeinsamer Kernbrücken-Transit -> EXIT. Die finale
+    --     Verbindung F (D2=B) bleibt als Alternative erhalten.
     --
     -- DIE FALLE: U (outer@45) ist früh sichtbar UND benutzbar (frei). Benutzt
     -- der Player sie zu früh (SOLO oder GEMEINSAM), wird U verbraucht und das
@@ -755,11 +761,12 @@ Levels = {
     --   - P1 zwingend (ohne Baby auf P1 ist A inaktiv — A nur solo).
     --   - P2 zwingend (ohne Baby auf P2 ist C inaktiv — der zweite Solo-
     --     Einstieg und damit der O-Zugang sind unerreichbar).
-    --   - P3 zwingend (ohne Baby auf P3 ist D inaktiv — der dritte Solo-
-    --     Einstieg für die FINALEN Schalterstellungen ist unerreichbar).
+    --   - P3 zwingend (ohne Baby auf P3 ist D inaktiv — der EXIT/Rückweg aus
+    --     dem Finalzustand ist unerreichbar).
     --   - O erreichbar NUR mit D1=A (S_O) UND D2=A (S_D2) UND P2=aktiv (C als
     --     einzige Route auf die innere O-Seite).
-    --   - O ist ein EINMALSCHALTER: nur die CCW-Überquerung verbraucht ihn.
+    --   - O ist ein EINMALSCHALTER: JEDE vollständige Überquerung verbraucht ihn
+    --     (anyDirection — minimale Erleichterung, keine Richtung raten müssen).
     --   - Der finale Weg (F + S_FINAL_O + S_FINAL_D1 + S_FINAL_D2 + Tor) ist
     --     erst offen, wenn O verbraucht, D1=A und D2=B sind — die falschen
     --     Zustände sperren den Ausgang (F ist durch S_FI gesperrt, solange
@@ -781,16 +788,22 @@ Levels = {
             -- B@75. Der Spieler MUSS D1 im Sollweg VIERMAL umstellen:
             -- B (Ph2) -> A (Ph4, für O) -> B (Ph6, Rückweg) -> A (Ph8, final).
             { id="D1", ring="inner", angle=95, symbol=1, onA={ "S_O", "S_FI", "S_FINAL_D1" }, onB="B", state="A" },
-            -- DOPPELSCHALTER D2 (inner@225, Start A). A öffnet S_D2 (zweite
+            -- DOPPELSCHALTER D2 (inner@240, Start A). A öffnet S_D2 (zweite
             -- Hälfte des O-Zugangs); B öffnet den zweiten finalen Shutter
             -- (S_FINAL_D2) und materialisiert die finale Verbindung F@295.
-            -- Im Sollweg GENAU EIN Wechsel: A -> B (Ph8).
-            { id="D2", ring="inner", angle=225, symbol=1, onA="S_D2", onB={ "S_FINAL_D2", "F" }, state="A" },
-            -- EINMALSCHALTER O (inner@200, Start A): S_FINAL_O zu (onB). Die
-            -- RICHTIGE Überquerung (CCW -> B) verbraucht O dauerhaft und
-            -- öffnet den finalen Shutter S_FINAL_O DAUERHAFT. Die CW-Überque-
-            -- rung (O bleibt A) ist wirkungslos.
-            { id="O", ring="inner", angle=200, symbol=1, onA={}, onB="S_FINAL_O", state="A", oneShot=true },
+            -- Im Sollweg GENAU EIN Wechsel: A -> B (Ph8) — NATÜRLICH lesbar:
+            -- nach D1=A fährt der Player CW an D2 vorbei (CW-Überquerung =
+            -- No-op, bleibt A) und überquert D2 auf dem kurzen Rückweg CCW -> B
+            -- (kein fast kompletter Ringweg über 0/360; D1 wird dabei nie
+            -- erneut ausgelöst). Bogen [233,247], sicher entfernt von O@200
+            -- ([193,207]) und S_FI@295 ([282,308]).
+            { id="D2", ring="inner", angle=240, symbol=1, onA="S_D2", onB={ "S_FINAL_D2", "F" }, state="A" },
+            -- EINMALSCHALTER O (inner@200, Start A): S_FINAL_O zu (onB).
+            -- anyDirection=true (MINIMALE ERLEICHTERUNG): JEDE vollständige
+            -- Überquerung (CW ODER CCW) verbraucht O dauerhaft und öffnet den
+            -- finalen Shutter S_FINAL_O — der Spieler muss die Richtung nicht
+            -- erraten. Die One-Shot-Natur bleibt (einmal verbraucht = fest).
+            { id="O", ring="inner", angle=200, symbol=1, onA={}, onB="S_FINAL_O", state="A", oneShot=true, anyDirection=true },
         },
 
         shutters = {
@@ -836,12 +849,18 @@ Levels = {
             -- (free=false), ausgefahren NUR solange das Baby auf P2 steht.
             -- Zweiter SOLO-Einstieg (Phase 4).
             { id="C", angle=132, free=false },
-            -- Bridge D (inner<->outer @5): von der Druckplatte P3 gesteuert
+            -- Bridge D (inner<->outer @220): von der Druckplatte P3 gesteuert
             -- (free=false), ausgefahren NUR solange das Baby auf P3 steht.
-            -- Dritter SOLO-Einstieg (Phase 8) und letzter Rückweg (Phase 9).
+            -- DER EXIT / RÜCKWEG aus dem Finalzustand: Nach D2=B steht der
+            -- Player inner@233 im freien Abschnitt zwischen S_D2 [165,191] und
+            -- D2 [233,247]. D@220 liegt IN diesem Abschnitt (Dock [208,232]),
+            -- sodass der Player D DIREKT erreicht, ohne D1 oder D2 erneut zu
+            -- überqueren (kein finaler Switchzustand wird verändert — die
+            -- alte Position @5 war über D2 nicht mehr erreichbar). Der Einstieg
+            -- nach innen ist Phase 8 über B (D1=B), nicht über D.
             -- babyLandDir = -1: das Baby landet nach einem Shared-Transit auf
             -- der CCW-Seite.
-            { id="D", angle=5, free=false, babyLandDir=-1 },
+            { id="D", angle=220, free=false, babyLandDir=-1 },
             -- Bridge F (inner<->outer @295): die FINALE VERBINDUNG, vom Doppel-
             -- schalter D2 gesteuert (free=false), in ZUSTAND B ausgefahren und
             -- durch S_FI (D1=A) zusätzlich gesperrt — erst im FINALZUSTAND
@@ -876,12 +895,82 @@ Levels = {
             { id="P3", ring="outer", angle=180, on="D" },
         },
 
-        -- Tor T (outer@355, frei): die finale Center-Bridge auf dem Außenring.
-        -- Nur gemeinsam abschließbar (Gate verlangt Player UND Baby). Erreichbar
-        -- nur über die finale Verbindung F (D2=B, D1=A) und die geöffneten
-        -- Shutter S_FINAL_O (O verbraucht), S_FINAL_D1 (D1=A) und S_FINAL_D2
-        -- (D2=B).
-        gate = { id="T", ring="outer", angle=355, free=true },
+        -- Tor T (inner@355, frei): die finale Center-Bridge auf dem INNEREN
+        -- Ring (wie alle anderen Level — NUR inner->Mittelpunkt, KEIN äußeres
+        -- Speichensegment, das den Innenring kreuzt/blockiert). Nur gemeinsam
+        -- abschließbar (Gate verlangt Player UND Baby). Erreichbar über die
+        -- geöffneten Shutter (S_FI offen bei D1=A): nach dem U-Transit schiebt
+        -- der Player das Baby CCW direkt zum Tor.
+        gate = { id="T", ring="inner", angle=355, free=true },
+    },
+
+    -- ---------------------------------------------------------------------
+    -- Level 9 „Zwei Tore“ — SEHR SCHWER (schwerer als Level 8).
+    -- ---------------------------------------------------------------------
+    -- Kernidee (User-Vorgabe):
+    --   U1 MUSS im Mittelteil SOLO verbraucht werden (einziger Zugang zum
+    --   abgetrennten äußeren Abschnitt, der zu O führt). U2 MUSS bis fast zum
+    --   Schluss aufgehoben und GEMEINSAM mit dem Baby benutzt werden. Wer U1
+    --   aufspart oder U2 zu früh solo benutzt, läuft in eine Sackgasse.
+    --
+    -- Geometrie:
+    --   Start: Player outer@5, Baby outer@30.
+    --   Solo-Einstiege: A (P1@130), C (P2@155), D (P3@177) — P3 ist der
+    --   letzte Rückweg, D@45 liegt bewusst auf der Seite von D1 (finaler
+    --   D1/D2-Zug ohne finale-Store-Blockade).
+    --   U1 (frei, oneShot) @270 liegt im abgetrennten äußeren Abschnitt
+    --   [245,320] (S_U1A/S_U1B fixedClosed): von inner erreicht man U1 nur
+    --   CW, landet im Abschnitt und verlässt ihn nur über G (D1=A) — so ist
+    --   der richtige O-Anlauf (CCW, nur so verbraucht) erzwungen.
+    --   U2 (frei, oneShot) @220 ist die finale Shared-Brücke: früh nutzbar
+    --   (Falle), aber erst am Ende GEMEINSAM mit dem Baby (Sackgasse sonst).
+    --   Finale Zone: F@345 (D2=B) -> S_FD1 (D1=A), S_FD2 (D2=B), S_FO (O=B)
+    --   -> Tor T@10 (INNENRING, wie alle anderen Level — nur inner->Mittel-
+    --   punkt, kein äußeres Speichensegment, das den Innenring kreuzt).
+    {
+        name = "Zwei Tore",
+        rings = { outer = 0, inner = -1 },
+        start = { ring = "outer", angle = 25 },
+        baby = { start = { ring = "outer", angle = 35 } },
+        switches = {
+            { id="D1", ring="inner", angle=95, symbol=1, onA={"S_FI","S_FINAL_D1","G","S_O1"}, onB="B", state="A" },
+            { id="D2", ring="inner", angle=40, symbol=1, onA="S_O2", onB={"S_FINAL_D2","F"}, state="A" },
+            { id="O", ring="inner", angle=190, symbol=1, onA={}, onB="S_FINAL_O", state="A", oneShot=true },
+        },
+        shutters = {
+            { id="S_O1", ring="inner", angle=160 },
+            { id="S_O2", ring="inner", angle=185 },
+            { id="S_FI", ring="inner", angle=340 },
+            { id="S_FINAL_D1", ring="outer", angle=345 },
+            { id="S_FINAL_D2", ring="outer", angle=350 },
+            { id="S_FINAL_O", ring="outer", angle=355 },
+            { id="S_U1A", ring="outer", angle=245, fixedClosed=true },
+            { id="S_U1B", ring="outer", angle=320, fixedClosed=true },
+        },
+        bridges = {
+            { id="A", angle=112, free=false },
+            { id="B", angle=75, free=false },
+            { id="C", angle=138, free=false },
+            { id="D", angle=50, free=false, babyLandDir=-1 },
+            { id="F", angle=345, free=false, babyLandDir=1 },
+            { id="G", angle=295, free=false, babyLandDir=-1 },
+            { id="U1", angle=270, free=true, oneShot=true, babyLandDir=-1 },
+            { id="U2", angle=212, free=true, oneShot=true, babyLandDir=1 },
+        },
+        plates = {
+            { id="P1", ring="outer", angle=130, on="A" },
+            { id="P2", ring="outer", angle=155, on="C" },
+            -- P3 (outer@177): bewusst NICHT auf 180 — der letzte Baby-Parkplatz
+            -- liegt 3° neben dem „offensichtlichen“ 6-Uhr-Punkt, der Abschluss-
+            -- Push zu U2 wird dadurch 35° statt 32° (präziser zu planen).
+            { id="P3", ring="outer", angle=177, on="D" },
+        },
+        -- Tor T (inner@10, frei): die finale Center-Bridge auf dem INNEREN
+        -- Ring (wie alle anderen Level — nur inner->Mittelpunkt, kein äußeres
+        -- Speichensegment, das den Innenring kreuzt). Nur gemeinsam abschließ-
+        -- bar. Erreichbar über F (D2=B): F GEMEINSAM -> außen, F zurück ->
+        -- innen, dann inner CW zum Tor (S_FI offen bei D1=A).
+        gate = { id="T", ring="inner", angle=10, free=true },
     },
 
 }
@@ -901,9 +990,9 @@ function Levels.validate()
         print("Raum " .. roomIndex .. ' "' .. roomName .. '": ' .. rule .. idPart)
     end
 
-    if #Levels ~= 8 then
+    if #Levels ~= 9 then
         errorCount = errorCount + 1
-        print("Levels: Anzahl der Räume ist " .. #Levels .. " statt 8")
+        print("Levels: Anzahl der Räume ist " .. #Levels .. " statt 9")
     end
 
     for roomIndex, room in ipairs(Levels) do

@@ -292,7 +292,7 @@ function Render.resetObjectAnims()
     -- eine einmalige 1-px-Innenbewegung der vier Eckmarken (2-3 Frames).
     Render.babyDockReadyPrev = {}
     Render.babyDockFeedbackFrames = {}
-    -- Player-Dock-Ready-Feedback (Auftrag, rein visuell): gleiche Flanke wie
+    -- Player-Dock-Ready-Feedback : gleiche Flanke wie
     -- das Baby-Dock — sobald ein Transfer (Brücke oder Tor) bereit wird,
     -- rückt der offene Rahmen 1 px nach innen (einmalig, 2-3 Frames).
     Render.playerDockReadyPrev = {}
@@ -580,7 +580,7 @@ function Render.updateObjectAnimations(dt)
         end
         Render.prevBridge[id] = cur
     end
-    -- Bridge-Ready-Impuls (Auftrag: Switch/Bridge Visual Polish): wird ein
+    -- Bridge-Ready-Impuls : wird ein
     -- aktives Bridge-Dock angedockt (Spieler in dockRange, kein laufender
     -- Transit/Camera), startet ein kurzer Frame-Impuls (minimal kräftiger +
     -- mechanischer Tick im Anschlussbereich). Kein permanentes Blinken, kein
@@ -646,7 +646,7 @@ function Render.updateObjectAnimations(dt)
             Render.babyDockFeedbackFrames[id] = nil
         end
     end
-    -- Player-Dock-Ready-Feedback (Auftrag): identische Ready-Flanken wie das
+    -- Player-Dock-Ready-Feedback : identische Ready-Flanken wie das
     -- Baby-Dock (Brücke bereit / Gate bereit) — der offene Rahmen rückt
     -- einmalig 1 px nach innen. Rein visuell, kein Gameplay-Effekt.
     for _, b in ipairs(state.room.bridges) do
@@ -768,7 +768,7 @@ function Render.notePlayerMovement(actualDelta)
     end
 end
 
--- Partikelschweif (Auftrag: überarbeitet — nur auf der Ringbahn, schwarz):
+-- Partikelschweif :
 -- beim echten Bewegen spawnt der Player kleine SCHWARZE Partikel exakt auf
 -- seiner Ringbahn (baseR = Bahnradius, kein Versatz, keine Drift), leicht
 -- hinter ihm in Bewegungsrichtung. Sie schrumpfen über die Lebensdauer.
@@ -1022,7 +1022,7 @@ function Render.sharedFormationAngle(axisAngle)
     return geo.norm(axisAngle - dir * gapDeg)
 end
 
--- Player-Dock-Sichtbarkeit an einer Brücke (Auftrag): das Player-Dock zeigt
+-- Player-Dock-Sichtbarkeit an einer Brücke : das Player-Dock zeigt
 -- NUR die GEMEINSAME Dockformation — wo der Player hinter dem Baby stehen
 -- muss, damit der gemeinsame Brückentransit möglich ist (das Baby-Dock zeigt
 -- die Babyposition). Im Solo-Fall gibt es KEIN Player-Dock: an der Brücken-
@@ -1040,7 +1040,7 @@ function Render.playerDockForBridge(b)
     return Render.sharedFormationAngle(b.angle)
 end
 
--- Player-Dock am TOR/Zielausgang (Auftrag): nur im Shared-Kontext (das Baby-
+-- Player-Dock am TOR/Zielausgang : nur im Shared-Kontext (das Baby-
 -- Dock am Tor ist sichtbar) — dann an der Formation direkt hinter dem Baby.
 -- Ein Solo-Dock am Tor gibt es nicht (der Ausgang verlangt immer das Baby).
 function Render.playerDockForGate()
@@ -1060,7 +1060,7 @@ function Render.playerDockForGate()
     return nil
 end
 
--- Bridge-Silhouetten-Sichtbarkeit (Auftrag): die Geistumrisse erscheinen NUR,
+-- Bridge-Silhouetten-Sichtbarkeit : die Geistumrisse erscheinen NUR,
 -- wenn der Player im Wechsel-Radius der Brücke steht (Bridge.isUsable ->
 -- aktive Brücke + innerhalb dockRange) — also genau dann, wenn er tatsächlich
 -- wechseln kann. GEMEINSAM (Baby-Dock sichtbar): Player + Baby; SOLO: nur
@@ -1073,29 +1073,6 @@ function Render.bridgeGhostMode(b)
         return nil
     end
     if Render.babyDockForBridge(b) then
-        return "shared"
-    end
-    return "player"
-end
-
--- Kernbrücken-Silhouetten-Sichtbarkeit (Auftrag, identisch zu Brücken): die
--- Geistumrisse erscheinen NUR, wenn der Ausgang tatsächlich nutzbar ist
--- (Gate.isUsable -> aktive Kernbrücke, Player auf dem Gate-Ring in Dock-
--- Reichweite, Baby am Dock). GEMEINSAM (Baby-Dock sichtbar): Player + Baby;
--- SOLO (Raum ohne Baby): nur Player. Kein laufender Transit / keine Kamera-
--- Transition. Rein visuell.
-function Render.gateGhostMode()
-    local g = state.room.gate
-    if not g then
-        return nil
-    end
-    if Bridge.isCrossing() or Baby.isCrossing() or Camera.isTransitioning() then
-        return nil
-    end
-    if not Gate.isUsable(g, state.player.ring, state.player.angle) then
-        return nil
-    end
-    if Render.babyDockForGate() then
         return "shared"
     end
     return "player"
@@ -1829,7 +1806,7 @@ end
 -- Innenring-Position (future -> active); die Mindestradius-Grenze verhindert
 -- Zeichnen bei (noch) ungültigem Radius.
 --
--- ZENTRUMS-REGEL (Auftrag „Level 1 Mitte“ + „Echo-Ring“): Der Future-Ring wird
+-- ZENTRUMS-REGEL : Der Future-Ring wird
 -- NUR gezeichnet, wenn er (noch) innerhalb der Kernfläche liegt (Raum 2+:
 -- Kern ist über den Future-Ring gewachsen -> der nächste Ring „entsteht“ im
 -- Kern). Liegt er dagegen AUẞERHALB oder exakt auf dem Kernrand (Raum 1:
@@ -2275,7 +2252,7 @@ local fillRoundRectRot
 --    Referenz: WEISSER Rounded-Block + schwarze 1-px-Kontur (das weiße Füllen
 --    verschmilzt mit der Bahn; die Kontur definiert die Blockform — wie bei
 --    der Druckplatte). KEINE Pfeile/Nase/Kerbe/Statussymbole/Textlabels.
---    Auftrag „Doppelschalter visuell klarer": die AKTIVE Richtung (CW = A,
+--    die AKTIVE Richtung (CW = A,
 --    CCW = B) ist als GEFÜLLTER Innenkreis markiert, die inaktive Seite als
 --    reine Kontur — man sieht sofort, welche Richtung gerade aktiv ist, ohne
 --    neue Symbole. Beim echten Umschalten sinkt der Körper 2 Frames radial
@@ -2313,8 +2290,8 @@ local function drawSwitch(sw, scale)
         w, h, crr, WHITE)
 
     -- Zwei gleich große Innenkreise nahe den Längsenden (symmetrisch,
-    -- vertikal zentriert) — auf dem weißen Block lesbar. Auftrag „Doppel-
-    -- schalter visuell klarer": die AKTIVE Richtung (CW = A, CCW = B) wird als
+    -- vertikal zentriert) — auf dem weißen Block lesbar. Die AKTIVE Richtung
+    -- (CW = A, CCW = B) wird als
     -- GEFÜLLTER schwarzer Kreis markiert; die INAKTIVE Seite bleibt als reine
     -- schwarze KONTOUR sichtbar (schwächer, aber präsent). Damit liest man die
     -- aktive Seite sofort, ohne neue Symbole oder Text. Umschalten = Füllung
@@ -2404,7 +2381,7 @@ local function drawSwitchVanish(sw)
     drawSwitch(sw, s)
 end
 
--- 8b) Druckplatte (Auftrag: „eingelassenes mechanisches Bauteil“): die Platte
+-- 8b) Druckplatte : die Platte
 --     ist ein klares RECHTECK (tangential plateSize px, radial exakt die
 --     Bahnbreite trackWidth), EXAKT in die Ringbahn eingelassen. Die weiße
 --     Ringlinie endet sauber an der Plattenkante (schwarzer Eraser-Balken),
@@ -2552,7 +2529,7 @@ local function drawPlayer()
         fillOval(x, y, angle, rBody + stretch + ow, rBody - sh + ow, WHITE)
         fillOval(x, y, angle, rBody + stretch, rBody - sh, BLACK)
     elseif reaction == "squint" then
-        -- Impact-Kompression (Auftrag: Segment-Kollision): der Körper staucht
+        -- Impact-Kompression : der Körper staucht
         -- sich kurz zusammen — radial 1.5 px + tangential 1 px, als ob die
         -- Figur gegen die Sperre stößt. Nur 6 Frames, keine Positionsänderung.
         local compR = config.impactBodyCompression
@@ -2585,7 +2562,7 @@ local function drawPlayer()
     local rad = math.rad(angle)
     local tx, ty = math.cos(rad), math.sin(rad) -- tangential CW
     if reaction == "squint" then
-        -- Zusammenkneifen (leicht verstärkt, Auftrag: Segment-Kollision):
+        -- Zusammenkneifen (leicht verstärkt):
         -- kurze schmale tangentiale Lidlinie — das Auge zieht sich sichtbar
         -- zusammen (etwas länger als der normale Blink, bleibt aber kompakt).
         local hl = config.impactSquintHalfLen
@@ -2631,7 +2608,7 @@ local function drawPlayer()
     gfx.setColor(WHITE)
 end
 
--- Spieler-Partikelschweif (Auftrag: überarbeitet): zeichnet die gespeicherten
+-- Spieler-Partikelschweif : zeichnet die gespeicherten
 -- Trail-Partikel als kleine SCHWARZE Punkte exakt auf der Ringbahn (baseR =
 -- Bahnradius, keine radiale Drift), die über ihre Lebensdauer schrumpfen.
 -- Unter dem Spieler (über der Bahn), lesbar auf der weißen Bahn. Rein
@@ -2712,7 +2689,7 @@ local function drawBabyDocks()
     end
 end
 
--- Player-Dock (Auftrag): kompakte KLAMMERFORM, die die Bahn „einklammert" —
+-- Player-Dock : kompakte KLAMMERFORM, die die Bahn „einklammert" —
 -- je ein tangentialer Balken knapp über und unter der Bahn (nur RADIALE
 -- Versätze liegen auf schwarzem Grund), mit kleinen Einhak-Füßen zur Bahn.
 -- Deutlich von der Baby-Dock-Sprache (vier L-Ecken) getrennt und kleiner/
@@ -2814,7 +2791,7 @@ local function drawGhostSegment(mode, fromR, toR, angle, dir)
     end
 end
 
--- Bridge-Silhouetten ENTFERNT (Auftrag): keine Player-/Baby-Geister, keine
+-- Bridge-Silhouetten ENTFERNT : keine Player-/Baby-Geister, keine
 -- Kreis-/Quadrat-Silhouetten, keine Ghost-Positionen mehr auf Brücken/Gate.
 -- Brücke + Dock allein reichen; keine Ersatzmarkierung.
 
@@ -2891,7 +2868,7 @@ local function drawBaby(transferBridge)
     if Render.figureCoveredByCore(math.sqrt((x - config.centerX) ^ 2 + (y - config.centerY) ^ 2)) then
         return
     end
-    -- Baby-REDESIGN (Auftrag): schwarze QUADRATISCHE Fläche, die sich EXAKT
+    -- Baby-REDESIGN : schwarze QUADRATISCHE Fläche, die sich EXAKT
     -- der Ringbahn anpasst — klare WEISSE Umrandung (1-2 px, config.baby-
     -- OutlineWidth), schwarze Innenfläche, KEINE Augen/Gesicht/Blinkanimation.
     -- Die Form folgt IMMER dem aktuellen Ringwinkel (rotierend mit der Bahn,
@@ -3143,7 +3120,7 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
         drawIfVisible("pulse", config.roomTransObjectStart, config.roomTransObjectEnd,
             function() drawCompletionPulse(currentRoomIndex) end)
     end
-    -- 9c3) Bridge-Silhouetten ENTFERNT (Auftrag): keine Player-/Baby-Geister,
+    -- 9c3) Bridge-Silhouetten ENTFERNT : keine Player-/Baby-Geister,
     --      keine Kreis-/Quadrat-Silhouetten, keine Ghost-Positionen mehr auf
     --      den Brücken. Brücke + Dock allein reichen — keine Ersatzmarkierung.
     -- 9d) Baby (generisch, Begleiter): vor dem Spieler, damit der Spieler
@@ -3160,13 +3137,13 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     drawPlayerTrail()
     drawPlayer()
 
-    -- KEIN Text beim Levelabschluss (Auftrag): nach dem Erreichen des
+    -- KEIN Text beim Levelabschluss : nach dem Erreichen des
     -- Mittelpunkts läuft NUR der weiße Kreis-Wipe (vergrößern -> Bildschirm
     -- komplett weiß -> neuer Raum verdeckt laden -> schrumpfen). Keine
     -- Levelnummer, kein Levelname, kein "Complete"/"Next Level", kein
     -- Zwischenhinweis — nichts Schriftliches.
 
-    -- Center-Wipe (Raumwechsel, AUFTRAG: normaler Übergang bis Level 7): der
+    -- Center-Wipe (Raumwechsel): der
     -- gefüllte WEISSE Kreis wächst zentriert bei (200,120) über den KOMPLETTEN
     -- 400x240-Bildschirm (deckt die alte Welt ab — der neue Raum wird dann
     -- verdeckt geladen). Auf dem weißen Bildschirm erscheint mittig kurz
@@ -3177,13 +3154,13 @@ function Render.drawRoom(roomComplete, currentRoomIndex)
     if wipeR then
         gfx.setColor(WHITE)
         gfx.fillCircleAtPoint(config.centerX, config.centerY, wipeR)
-        -- „ROOM X / 10" mittig auf dem weißen Bildschirm (nur in der
+        -- „ROOM X / 9" mittig auf dem weißen Bildschirm (nur in der
         -- ROOM-Phase): links der aktuell geladene Raum, rechts immer die
         -- Gesamtzahl (config.roomDisplayTotal). Schwarz auf komplett weißem
         -- Grund, horizontal und vertikal sauber zentriert, nur diese eine
         -- Zeile. „ROOM" steht NUR einmal am Anfang.
-        -- Font: die natuerliche Asheville-Rounded-24 (TextUI.font, AUFTRAG
-        -- „einheitliche Typografie"); vertikale Mitte aus der Font-Hoehe.
+        -- Font: die natuerliche Asheville-Rounded-24 (TextUI.font);
+        -- vertikale Mitte aus der Font-Hoehe.
         if Wipe.phase == "room" and Wipe.roomNumber then
             local fh = (TextUI.font and TextUI.font:getHeight()) or 22
             Render.drawTextBlackCentered("ROOM " .. Wipe.roomNumber() .. " / " .. config.roomDisplayTotal, math.floor((240 - fh) / 2))

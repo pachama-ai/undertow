@@ -39,7 +39,7 @@ Tutorial.hint = nil -- { title, sub, t, hold, key, dismissing }
 -- System-Font hat keine Umlaut-Glyphen, so ist die Darstellung sicher.
 Tutorial.focus = nil -- { title, lines, ring, angle, t }
 
--- Proximity-Mechanik (Auftrag: „erst VOR Kontakt“): das im Raum noch nicht
+-- Proximity-Mechanik : das im Raum noch nicht
 -- erklärte neue Element wird NICHT beim Levelstart eingeblendet. maybeStartFocus
 -- merkt es sich nur als pending; erst wenn der Player sich dem Element zum
 -- ersten Mal deutlich nähert (checkProximityFocus, ± tutorialProximityRange),
@@ -57,7 +57,13 @@ local HINT_HOLD <const> = 2.4   -- volle Sichtbarkeit transienter Hinweise (s)
 local INTRO_GUIDE <const> = "A = Continue"
 local INTRO_START <const> = "A = Start"
 
--- Einleitungsseite 1 (THIS IS YOU): komplett ENGLISCH (Auftrag). Player groß
+-- PLAYER-VORSTELLUNG (ROOM 1, ersetzt den alten eigenständigen Kurbel-\
+-- Hinweis „Turn the crank to move.“ KOMPLETT): als Fokus auf den ECHTEN
+-- Player im Spielfeld mit der unteren Infoleiste (exakt derselbe Stil wie
+-- alle Element-Hinweise). Text und „A = continue“ wie spezifiziert.
+local PLAYER_INTRO_TEXT <const> = "Turn the crank. See where it takes you."
+
+-- Einleitungsseite 1 (THIS IS YOU): komplett ENGLISCH . Player groß
 -- links (lebendig: Pupille wandert, Blinzeln), Text rechts sauber gesetzt.
 local WELCOME_TITLE <const> = "THIS IS YOU."
 local WELCOME_LINE1 <const> = "Turn the crank to move along the rings."
@@ -71,7 +77,7 @@ local COMPANION_LINE1 <const> = "Push it with you."
 local COMPANION_LINE2 <const> = "You cannot pull it."
 local COMPANION_LINE3 <const> = "Reach the center together."
 
--- Alle Element-Erklaerungen (AUFTRAG „extrem kurz"): KEINE Titel, nur EIN
+-- Alle Element-Erklaerungen : KEINE Titel, nur EIN
 -- sehr kurzer englischer Satz. Einheitliche Struktur: key -> { text }.
 -- "ziel" (Kernbrücke) bleibt mit seinem kurzen Satz (Raumabschluss).
 -- "undo" ist definiert, wird aber nicht ausgeloest. Alle Zeichen ASCII
@@ -287,6 +293,23 @@ function Tutorial.dismissFocus()
     Tutorial.focus = nil
 end
 
+-- Player-Vorstellung (ROOM 1, nur NEW GAME): Fokus auf den ECHTEN Player an
+-- seiner echten Startposition (keine Ersatzgrafik, keine Kameraänderung,
+-- keine Verschiebung) mit derselben Fokusdarstellung wie bei neuen Elementen
+-- (Hervorhebung + untere Infoleiste + „A = continue“). Der alte separate
+-- Kurbel-Hinweis ist damit vollständig ersetzt — es gibt nur noch DIESEN
+-- einen Bewegungs-Hinweis. Nutzt das bestehende Seen-Flag „move“: nach
+-- Continue (bereits gesehen) oder B-Restart wird die Vorstellung NICHT
+-- erneut gezeigt. Liefert true, wenn sie startet (Audio-Tick).
+function Tutorial.startPlayerIntro()
+    if Tutorial.isSeen("move") or Tutorial.focusActive() then
+        return false
+    end
+    Tutorial.markSeen("move")
+    Tutorial.focus = { key = "player", text = PLAYER_INTRO_TEXT, t = 0 }
+    return true
+end
+
 function Tutorial.updateFocus(dt)
     if Tutorial.focus then
         Tutorial.focus.t = Tutorial.focus.t + dt
@@ -325,7 +348,7 @@ function Tutorial.maybeStartFocus(roomIndex)
     return false
 end
 
--- Proximity-Trigger (Auftrag: „deutlich VOR dem Element“): wenn ein pending
+-- Proximity-Trigger : wenn ein pending
 -- neues Element existiert und der Player sich ihm zum ersten Mal nähert (auf
 -- demselben Ring, innerhalb tutorialProximityRange ~12-20°), startet der
 -- Fokus — der Player steht dann noch VOR dem Element (kleine sichtbare Lücke,
@@ -423,8 +446,7 @@ function Tutorial.checkElementTriggers(roomIndex, moveResult)
             return true
         end
     end
-    -- Blockade (Shutter) wird NICHT mehr beim Aufprall erklärt (Auftrag:
-    -- deutlich VOR dem Kontakt) — der Fokus läuft über
+    -- Blockade (Shutter) wird NICHT mehr beim Aufprall erklärt — der Fokus läuft über
     -- checkProximityFocus/findNearbyClosedShutter, solange der Player noch
     -- VOR der geschlossenen Blende steht.
     -- Ziel: erste Andock-Annäherung an das Tor.
@@ -449,22 +471,6 @@ function Tutorial.findApproachableBridge()
     for _, b in ipairs(roomData.bridges) do
         if math.abs(Geometry.delta(State.player.angle, b.angle)) <= range then
             return State.player.ring, b.angle
-        end
-    end
-    return nil
-end
-
--- Liefert Ring + Winkel einer geschlossenen Blende (physical collisionActive),
--- sonst nil.
-function Tutorial.findBlockingShutter()
-    local roomData = State.room
-    if not roomData then
-        return nil
-    end
-    for _, sh in ipairs(roomData.shutters) do
-        local phys = Room.shutters and Room.shutters[sh.id]
-        if phys and phys.collisionActive == true then
-            return sh.ring, sh.angle
         end
     end
     return nil
@@ -512,29 +518,22 @@ function Tutorial.findApproachableGate()
 end
 
 -- --- Level-1-Hinweise (Steuerung im Spiel lernen) -------------------------
--- Wird pro kontrollierbarem Frame aufgerufen. Liefert true, wenn in DIESEM
--- Frame ein neuer Hinweis erzeugt wurde (für den dezenten Erscheinen-Tick).
+-- Wird pro kontrollierbarem Frame aufgerufen (nur wenn die Gameplay-Pipeline
+-- das erste Mal nach dem Room-Reveal + der kurzen Ruhe freigegeben ist).
+-- Liefert true, wenn in DIESEM Frame ein Hinweis erzeugt wurde (Audio-Tick).
 function Tutorial.checkLevelHints(roomIndex)
     if roomIndex ~= 1 or not Tutorial.enabledForRoom(roomIndex) then
         return false
     end
-    -- „Turn the crank to move." beim ersten kontrollierbaren Moment; bleibt
-    -- bis zur ersten Bewegung (onPlayerMoved), im gleichen unteren Leisten-
-    -- format wie alle Hinweise. NUR dieser Hinweis bleibt in Level 1
-    -- sichtbar (kein Hinweis mitten auf dem Bildschirm).
-    if not Tutorial.isSeen("move") and not Tutorial.hint then
-        Tutorial.showHintPersistent("move", "Turn the crank to move.")
-        return true
+    -- PLAYER-VORSTELLUNG beim ersten kontrollierbaren Moment von ROOM 1:
+    -- Fokus auf den echten Player, untere Infoleiste „This is you. Turn the
+    -- crank to move.“ + „A = continue“. Der alte eigenständige Kurbel-Hinweis
+    -- „Turn the crank to move.“ (persistenter Leisten-Hinweis) wurde KOMPLETT
+    -- entfernt — es gibt nur noch diesen EINEN Bewegungs-Hinweis.
+    if not Tutorial.isSeen("move") then
+        return Tutorial.startPlayerIntro()
     end
     return false
-end
-
--- Erste echte Bewegung blendet den Kurbel-Hinweis aus (Level 1).
-function Tutorial.onPlayerMoved(roomIndex)
-    if roomIndex == 1 and Tutorial.enabledForRoom(roomIndex) and Tutorial.isHintPersistent("move") then
-        Tutorial.dismissHint()
-        Tutorial.markSeen("move")
-    end
 end
 
 -- Erster Ziehversuch (Player in Kontakt, bewegt sich vom Baby weg).
@@ -628,7 +627,7 @@ local function drawPlayerFigureIdle(cx, cy, r, eyeDx, eyeDy, blink)
     gfx.setLineWidth(1)
 end
 
--- Baby (Intro-Seite 2, AUFTRAG: exakt die Spiel-Form, auf dunklem Grund lesbar):
+-- Baby (Intro-Seite 2):
 -- kleines SCHWARZES Quadrat (Kantenlänge = config.babyVisualSize, exakt die
 -- Gameplay-Größe) mit klarer WEISSER Umrandung (1 px) — dieselbe Quadrat-
 -- Formensprache wie im eigentlichen Spiel, kein Kreis, kein Platzhalter,
@@ -737,7 +736,7 @@ function Tutorial.drawIntro()
     end
 end
 
--- --- Fokus-Overlay (AUFTRAG „deutlich minimalistischer") --------------------
+-- --- Fokus-Overlay  --------------------
 -- KEINE grosse Karte, KEIN Rahmen um den Text, KEINE technische Überschrift,
 -- KEINE langen Erklaerungen. Das echte Spielelement bleibt sichtbar (ebenso
 -- Player/Baby, die noch sichtbar Abstand zum Element haben), der Rest des
@@ -854,7 +853,7 @@ local function fillComplement(keep, yMin, yMax, stripeStep)
     end
 end
 
--- --- Tutorial-Trigger (AUFTRAG „früh, ohne Bewegungskorrektur") ------------
+-- --- Tutorial-Trigger  ------------
 -- KEINE Tutorial-Bremse mehr: die Steuerung fühlt sich völlig normal an
 -- (kein Dämpfen, kein Stopp, kein Snap, keine Kameraänderung). Die Hinweise
 -- starten über reine Proximity-Zonen (checkProximityFocus für Mechanik +
@@ -863,7 +862,7 @@ end
 -- aktiv ist (bis A). Getrennt vom Bridge-Crank-Widerstand (der bleibt
 -- normale Gameplaymechanik und funktioniert auch später weiter).
 
--- --- Untere Infoleiste (AUFTRAG „schwarzer Bereich nur unten") -------------
+-- --- Untere Infoleiste  -------------
 -- SOLID schwarzer Balken unten mit feiner WEISSER Trennlinie fast über die
 -- volle Breite. Darin weisse, FEINE Schrift (Asheville-Sans-14-Bold, natür-
 -- liche 14 px — kein Downscale, keine abgeschnittene/grobe Typo). Text links,
@@ -890,7 +889,7 @@ local function wrapBarText(text, maxWidth)
     return lines
 end
 
-function Tutorial.drawInfoBar(text, rightText)
+function Tutorial.drawInfoBar(text, rightText, textScale)
     local BAR_H <const> = cfg("tutorialBarHeight", 40)
     local MARGIN <const> = cfg("tutorialBarMargin", 14)
     local LINE_X0 <const> = cfg("tutorialLineX0", 8)
@@ -907,10 +906,19 @@ function Tutorial.drawInfoBar(text, rightText)
     local textMaxW = 400 - MARGIN - rightW - COL_GAP - MARGIN
     textMaxW = math.max(60, textMaxW)
 
-    -- Text links: an Wortgrenzen umbrechen (feine Font), max. 2 Zeilen.
-    local lines = wrapBarText(text, textMaxW)
-    if #lines > 2 then
-        lines = { lines[1], lines[2] }
+    -- Text links: an Wortgrenzen umbrechen (feine Font), max. 2 Zeilen. NUR
+    -- die Player-Vorstellung (ROOM 1 — textScale gesetzt, kleinere Font-
+    -- Variante) wird bewusst in EINER Zeile gezeichnet: kein Umbruch. Die
+    -- skalierte Einzelzeile ist schmal genug, „A = continue“ rechts wird nie
+    -- überlappt. Alle übrigen Tutorialtexte behalten ihre Umbruchlogik.
+    local lines
+    if textScale and textScale ~= 1 then
+        lines = { text }
+    else
+        lines = wrapBarText(text, textMaxW)
+        if #lines > 2 then
+            lines = { lines[1], lines[2] }
+        end
     end
     local lineGap = 2
     local blockH = #lines * fontH + (#lines - 1) * lineGap
@@ -929,10 +937,18 @@ function Tutorial.drawInfoBar(text, rightText)
         textY = LINE_Y + 2
     end
     for i, l in ipairs(lines) do
-        TextUI.drawBarText(l, MARGIN, textY)
+        -- Nur für die Player-Vorstellung wird DIESER eine Text in der kleineren
+        -- Font-Variante gezeichnet; direkt danach (nächster Text, z. B.
+        -- „A = continue“) gilt wieder die normale Leisten-Font.
+        if textScale and textScale ~= 1 then
+            TextUI.drawBarTextScaled(l, MARGIN, textY, textScale)
+        else
+            TextUI.drawBarText(l, MARGIN, textY)
+        end
         textY = textY + fontH + lineGap
     end
     -- A rechts (eigene Spalte, vertikal zentriert, nie mit dem Text kollidierend).
+    -- Immer in der NORMALEN Leisten-Font (Schriftgröße unverändert).
     if rightText then
         TextUI.drawBarTextRight(rightText, 400 - MARGIN, LINE_Y + math.floor((BAR_H - fontH) / 2))
     end
@@ -948,6 +964,11 @@ local function focusMarkerHalf(key, radius)
     if mk == "begleiter" then
         local s = (c and c.babyVisualSize) or 9
         return s / 2 + 4, s / 2 + 4
+    elseif mk == "player" then
+        -- Player-Vorstellung: enger Fokusrahmen um den ECHTEN Player
+        -- (Körperradius + etwas Luft, quadratisch).
+        local r = (c and c.playerBodyRadius) or 6
+        return r + 4, r + 4
     elseif mk == "druckplatte" then
         local s = (c and c.plateSize) or 13
         return s / 2 + pad + 2, 10
@@ -969,9 +990,23 @@ function Tutorial.drawFocus()
     if not focus then
         return
     end
-    -- Elementposition (Ring + Winkel -> Bildschirmposition).
-    local radius = Render.ringRadius(focus.ring)
-    local ox, oy = Geometry.polar(200, 120, radius, focus.angle)
+    -- Elementposition (Ring + Winkel -> Bildschirmposition). Bei der Player-
+    -- Vorstellung (ROOM 1) ist das „Element“ der ECHTE Player an seiner echten
+    -- Bildschirmposition — keine Ersatzgrafik, keine Kameraänderung, keine
+    -- Verschiebung; dieselbe Fokusdarstellung wie bei anderen Elementen.
+    local radius, ox, oy
+    if focus.key == "player" then
+        ox, oy = Render.playerScreenPosition()
+        radius = Render.playerRadius()
+        if ox == nil then
+            -- Fallback (im normalen Gameplay nie aktiv): aus dem State.
+            radius = Render.playerRadius() or Render.ringRadius(state.player.ring)
+            ox, oy = Geometry.polar(200, 120, radius, state.player.angle)
+        end
+    else
+        radius = Render.ringRadius(focus.ring)
+        ox, oy = Geometry.polar(200, 120, radius, focus.angle)
+    end
     local tangHalf, radHalf = focusMarkerHalf(focus.key, radius)
     local pad = (Config and Config.tutorialMarkerPad) or 2
     local wx0 = math.max(0, math.floor(ox - tangHalf - pad))
@@ -1012,8 +1047,15 @@ function Tutorial.drawFocus()
     fillComplement(keep, 0, LINE_Y - 1, dimStep)
 
     -- 2) Untere Infoleiste (unverändert): schwarzer Balken, weisse Trennlinie,
-    --    feine weisse Schrift, Text links, „A = continue" rechts.
-    Tutorial.drawInfoBar(focus.text, "A = continue")
+    --    feine weisse Schrift, Text links, „A = continue" rechts. Nur bei der
+    --    Player-Vorstellung (ROOM 1) wird der eine Text in der kleineren Font-
+    --    Variante gerendert (Scale aus Config); „A = continue" und alle anderen
+    --    Tutorialtexte behalten ihre exakte Schriftgröße.
+    local textScale = nil
+    if focus.key == "player" then
+        textScale = cfg("tutorialPlayerIntroTextScale", 0.8)
+    end
+    Tutorial.drawInfoBar(focus.text, "A = continue", textScale)
 
     -- 3) Klarer Fokusrahmen: vier symmetrische Eckmarker nah am Element,
     --    dezent pulsierend (1 px langsam nach innen/aussen, kein Blinken).
@@ -1059,8 +1101,7 @@ function Tutorial.drawHint()
     if alpha <= 0 then
         return
     end
-    -- GLEICHE untere Infoleiste wie bei allen Element-Hinweisen (AUFTRAG
-    -- „einheitlicher Aufbau"): Spielfeld bleibt komplett sichtbar, weisse
+    -- GLEICHE untere Infoleiste wie bei allen Element-Hinweisen: Spielfeld bleibt komplett sichtbar, weisse
     -- Trennlinie, feiner weisser Text links. Kein A rechts — diese Hinweise
     -- schliesst nicht A, sondern Bewegung (Kurbel) bzw. Zeit (transient).
     -- Ausblenden per Dissolve-Raster in der Leiste.

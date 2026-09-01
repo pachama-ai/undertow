@@ -8,8 +8,9 @@
 --   A               -> Brücke/Gate benutzen (Room.tryUseConnection)
 --   B               -> letzte zustandsändernde Handlung rückgängig (Undo)
 --   Render.drawRoom  -> Rendering (read-only)
--- Raumprogression: ein erfolgreiches Gate beendet Raum 1-5 und lädt automatisch
--- den nächsten Raum (Controller). Das finale Gate in Raum 6 startet das Outro
+-- Raumprogression: ein erfolgreiches Gate beendet den aktuellen Raum und lädt
+-- automatisch den nächsten Raum (Controller). Das finale Gate im LETZTEN Raum
+-- (aktuell Raum 9) startet das Outro
 -- (Abschlussphase B: R1 löst sich auf, der Kern füllt den Bildschirm, die Iris
 -- öffnet sich, Schnitt zum Titel) und führt automatisch zurück ins Startmenü.
 -- Kamera, Raumwechselanimation, Audio, Startmenü und Speicherstand sind
@@ -46,6 +47,7 @@ import "ui/camera"
 import "ui/roomtransition"
 import "ui/wipe"
 import "ui/phase7"
+import "ui/roomreveal"
 import "ui/menu"
 import "ui/transition"
 
@@ -70,6 +72,7 @@ local transition <const> = Transition
 local roomTransition <const> = RoomTransition
 local wipe <const> = Wipe
 local phase7 <const> = Phase7
+local roomReveal <const> = RoomReveal
 
 local gfx <const> = playdate.graphics
 
@@ -90,8 +93,8 @@ local appMode = "menu"
 -- Minimaler lokaler Raumcontrollerzustand (kein Levelmanager).
 local currentRoomIndex = 1
 local roomComplete = false
--- Finaler Raum-6-Moment (Pass 2): Frame-Zähler für den kurzen Stillstand vor
--- dem Outro (nil = nicht aktiv). Währenddessen ist die Eingabe gesperrt und
+-- Finaler letzter-Raum-Moment (Pass 2): Frame-Zähler für den kurzen Stillstand
+-- vor dem Outro (nil = nicht aktiv). Währenddessen ist die Eingabe gesperrt und
 -- die Welt steht (Ghost-Drift eingefroren).
 local finalHoldFrames = nil
 
@@ -218,7 +221,7 @@ local function startRoom(index)
     room.init()
     roomComplete = false
     currentRoomIndex = index
-    -- Finaler Raum-6-Stillstand beenden: Ein Systemmenü-Restart mitten im
+    -- Finaler letzter-Raum-Stillstand beenden: Ein Systemmenü-Restart mitten im
     -- finalen Moment darf kein Outro mehr nachziehen („temporäre Visualstates"
     -- zurücksetzen, B-Taste-Rework Teil 4).
     finalHoldFrames = nil
@@ -233,9 +236,9 @@ local function startRoom(index)
     prevPlatePressed = nil
 end
 
--- Startet das Outro nach dem finalen Gate (Raum 7). Nur Präsentation: wechselt
--- in den Outro-Modus, startet die Transition mit der sichtbaren Room-7-Geometrie
--- und entfernt die Gameplay-Systemmenüeinträge (Punkt 16: kein „Raum neu
+-- Startet das Outro nach dem finalen Gate (letzter Raum). Nur Präsentation:
+-- wechselt in den Outro-Modus, startet die Transition mit der sichtbaren
+-- letzten-Raum-Geometrie und entfernt die Gameplay-Systemmenüeinträge (Punkt 16: kein „Raum neu
 -- starten"/„Zum Menü" im Outro). sysmenu.removeAll() direkt (Äquivalent zu
 -- removeGameplaySystemMenu, das erst später deklariert ist). B ist im Outro
 -- gesperrt (updateScene ruft updateRoom dort nicht auf).
@@ -251,9 +254,10 @@ end
 -- Zentrale Progressionsentscheidung nach einer Verbindungs-Aktion (A).
 --   crossing     -> eine laufende Andockhilfe beenden
 --   roomComplete -> nächsten Raum laden (falls vorhanden), sonst abgeschlossen.
--- Räume 1-6: sofort nächsten Raum initialisieren (roomComplete wird von
--- startRoom zurückgesetzt). Raum 7: kein nächster Raum (nextIndex 8 existiert
--- nicht) -> roomComplete bleibt true und das Gameplay friert sichtbar ein
+-- Es gibt genau 9 Räume: Räume 1-8 laden sofort den nächsten Raum (roomComplete
+-- wird von startRoom zurückgesetzt). Der LETZTE Raum (9): kein nächster Raum
+-- (nextIndex 10 existiert nicht) -> roomComplete bleibt true und das Gameplay
+-- friert sichtbar ein
 -- (kein Crash, kein nil-Zugriff; das Outro folgt separat in Abschlussphase B).
 local function handleConnectionResult(result, fromCenterTransit)
     if result.crossing then
@@ -263,9 +267,9 @@ local function handleConnectionResult(result, fromCenterTransit)
         local nextIndex = currentRoomIndex + 1
         if levels[nextIndex] ~= nil then
             -- Fortschritt persistieren (nur bei echtem neuen Höchststand) BEVOR
-            -- der nächste Raum initialisiert wird: Raum 1 -> Save 2, ..., Raum 6
-            -- -> Save 7. Raum-7-Completion lädt keinen Raum 8 und speichert nie
-            -- einen Wert >= 8 (Save bleibt 7).
+            -- der nächste Raum initialisiert wird: Raum 1 -> Save 2, ..., Raum 8
+            -- -> Save 9. Die Completion des letzten Raums (9) lädt keinen Raum
+            -- 10 und speichert nie einen Wert >= 10 (Save bleibt 9).
             saveHighestRoom(nextIndex)
             -- Center-Wipe: Der neue Raum wird NICHT sofort geladen. Gameplay
             -- friert ein; der gefüllte Mittelpunkt wächst über den Bildschirm
@@ -318,7 +322,7 @@ local function handleConnectionResult(result, fromCenterTransit)
             if nextIndex == config.phaseTwoStartRoom then
                 -- LEVEL-7-SPEZIALÜBERGANG (Ende der Lernphase): statt des
                 -- normalen Center-Wipes läuft die kosmische Sequenz
-                -- (Ruhe -> langsame Expansion zum Vollbild -> „ROOM X / 10“ ->
+                -- (Ruhe -> langsame Expansion zum Vollbild -> „ROOM X / 9“ ->
                 -- schnelle Kontraktion -> direkter Reveal). Der neue Raum
                 -- wird in der Vollbild-Phase verdeckt geladen
                 -- (phase7.update liefert "load").
@@ -349,7 +353,7 @@ local function handleConnectionResult(result, fromCenterTransit)
             -- nicht schon beim bloßen Erreichen des Gates ohne Baby.
             audio.playRoomTransition()
         else
-            -- Raum 6 finales Gate -> finaler Gameplay-Abschluss + Outro.
+            -- letzter Raum finales Gate -> finaler Gameplay-Abschluss + Outro.
             -- roomComplete bleibt interner Zustand; die Gameplaypipeline läuft
             -- danach nicht weiter. Kein Room7, kein Save7, highestRoom bleibt 6.
             -- Atmosphäre (Pass 2): kurzer mechanischer Systemimpuls wie in
@@ -410,6 +414,7 @@ local function restartRoom()
     roomTransition.reset()
     wipe.reset()
     phase7.reset()
+    roomReveal.reset()
     camera.clearRevealScale()
     startRoom(currentRoomIndex)
     camera.init(state.room.rings.outer)
@@ -428,7 +433,7 @@ end
 local function startRestartAnim()
     restartAnim = { t = 0, reloaded = false }
     camera.setRestartScale(1)
-    -- MIXING (AUFTRAG): während Collapse/Rebuild pausiert der Kernpuls.
+    -- MIXING : während Collapse/Rebuild pausiert der Kernpuls.
     audio.setCoreHold(RESTART_TOTAL)
 end
 
@@ -492,7 +497,7 @@ local function showMainMenu()
     removeGameplaySystemMenu()
     -- Anleitung auch im Startmenü verfügbar (Systemmenü ist dort offen).
     sysmenu.installHelp(function() pendingSystemAction = "anleitung" end)
-    -- STARTANIMATION (AUFTRAG): sehr leiser kontinuierlicher Rise über die
+    -- STARTANIMATION : sehr leiser kontinuierlicher Rise über die
     -- Ring-Zeichenzeit (kein Ton pro Segment, nicht überladen).
     audio.playMenuRise(config.menuDrawDuration)
 end
@@ -506,6 +511,7 @@ local function goToMainMenu()
     roomTransition.reset()
     wipe.reset()
     phase7.reset()
+    roomReveal.reset()
     camera.clearRevealScale()
     showMainMenu()
 end
@@ -649,8 +655,8 @@ local function updateRoom()
     -- Kurze Ruhe NACH dem Level-Reveal (Start vom Titel oder Raumübergang):
     -- Gameplay gesperrt, die fertige Levelansicht bleibt sichtbar (kein
     -- Zoomen, kein Neuladen). Danach: die Intro-/Anleitungs-Screens sind
-    -- ENTFERNT (Auftrag) — bei NEW GAME startet stattdessen die ROOM-Anzeige
-    -- für Level 1 („ROOM 1 / ROOM 10" auf weiß, ~3 s, dann direkter Cut ins
+    -- ENTFERNT  — bei NEW GAME startet stattdessen die ROOM-Anzeige
+    -- für Level 1 („ROOM 1 / ROOM 9" auf weiß, ~3 s, dann direkter Cut ins
     -- fertige Level 1), bei CONTINUE gar keine Intro-/ROOM-Anzeige. Die
     -- kontextbezogenen Element-Tutorials IN den Leveln bleiben erhalten und
     -- kommen IMMER erst nach dem komplett fertigen Level-Reveal.
@@ -679,7 +685,7 @@ local function updateRoom()
     -- beendet und die Eingabe im selben Frame freigegeben.
     -- LEVEL-7-SPEZIALÜBERGANG (Ende der Lernphase -> Phase 2, „Urknall“):
     -- kurze Ruhe/Verdichtung -> LANGSAME Expansion des hellen Kerns bis zum
-    -- kompletten Vollbild -> zentriert „ROOM X / 10“ für ~2 s (in dieser
+    -- kompletten Vollbild -> zentriert „ROOM X / 9“ für ~2 s (in dieser
     -- Phase wird der neue Raum (Phase 2) verdeckt geladen; phase7.update
     -- liefert "load") -> SCHNELLE Kontraktion zurück zum winzigen Punkt ->
     -- DIREKTER REVEAL von Level 8 (kein Wiederaufbau, keine Figuren-Exit-
@@ -703,7 +709,13 @@ local function updateRoom()
             camera.init(state.room.rings.outer)
         elseif event == "done" then
             phase7.reset()
-            camera.clearRevealScale()
+            -- ROOM-Text ist VORBEI (er wurde während der Phase7-„label“-Phase
+            -- auf dem rein weißen Bildschirm gezeigt — kein Overlap, kein
+            -- Crossfade). Erst JETZT wird Room 8 sichtbar: im selben Frame
+            -- sofort klein (Startgröße, kein Fullsize-Flash) und anschließend
+            -- als Einheit wachsend (RoomReveal 0.30 -> 1.0, Eingabe gesperrt).
+            roomReveal.start(0)
+            camera.setRevealScale(config.roomRevealStartScale)
         end
         -- Audio (EDGE-Trigger): Phasenwechsel melden — Expansion, ROOM-Text,
         -- Kontraktion (kein Sound pro Frame).
@@ -748,16 +760,45 @@ local function updateRoom()
             -- Kamera auf den neuen Außenring stabil setzen (keine Ring-Morph-
             -- Transition; das Level rendert direkt in Normalgröße).
             camera.init(state.room.rings.outer)
-            -- MIXING (AUFTRAG): während der ROOM-X-/ROOM-10-Anzeige komplette
+            -- MIXING : während der ROOM-X-/ROOM-10-Anzeige komplette
             -- Ruhe (kein Kernpuls, keine Klicks); danach startet der Puls des
             -- neuen Raums nach kurzer Pause automatisch wieder.
             audio.setCoreHold(config.roomWipeRoomHold + config.roomTransTutorialSettle)
         elseif event == "done" then
             wipe.reset()
-            -- Level 2+: nach dem KOMPLETT fertigen Raumübergang (Player/Baby
-            -- sauber am Start) bleibt das neue Level ca. 0.25 s vollständig
-            -- sichtbar, erst dann greifen Mechanik-Fokus/Hinweise (Punkt 10).
+            -- KEIN Fullsize-Flash: Der erste sichtbare Frame des neuen Raums
+            -- ist bereits KLEIN (Startgröße). Die Render-Skalierung wird sofort
+            -- gesetzt (nicht erst im nächsten Reveal-Update), damit der weiße
+            -- Bildschirm direkt in den kleinen Raum übergeht. Danach wächst der
+            -- Raum als Einheit aus dem Mittelpunkt auf Normalgröße
+            -- (RoomReveal, ~0.8 s, Eingabe gesperrt). Erst wenn Scale exakt
+            -- 1.0 erreicht ist, folgt die kurze Ruhe (revealSettle), danach
+            -- greifen Mechanik-Fokus/Hinweise (Punkt 10).
+            roomReveal.start(0)
+            camera.setRevealScale(config.roomRevealStartScale)
+        end
+        render.noteShutterBlocked(false)
+        render.noteBabyBlocked(false)
+        audio.noteShutterBlocked(false)
+        return
+    end
+
+    -- Room-Reveal-Wachstum (nach einem Raumwechsel): der komplett neue Raum
+    -- wächst als EINHEIT aus dem Mittelpunkt (200,120) auf Normalgröße
+    -- (Camera.revealScale skaliert alle Radien gemeinsam — Ringe, Core,
+    -- Bridges, Shutter, Switches, Platten, Player, Baby; keine Gameplay-Daten
+    -- werden verändert). Während des Reveals (Haltephase + Wachstum) ist die
+    -- gesamte Gameplay-Eingabe gesperrt (Kurbel, D-Pad, A, B, DockAssist);
+    -- erst bei exakt Scale 1.0 wird die Render-Skalierung entfernt und das
+    -- Gameplay freigegeben (exakte Normalpositionen, kein Positionssprung).
+    if roomReveal.isActive() then
+        if roomReveal.update(FRAME_DT) then
+            -- Wachstum abgeschlossen: Render-Transform entfernen, normale
+            -- Gameplaypositionen, kurze Ruhe, dann Tutorial/Input.
+            camera.clearRevealScale()
             revealSettle = config.roomTransTutorialSettle
+        else
+            camera.setRevealScale(roomReveal.getScale())
         end
         render.noteShutterBlocked(false)
         render.noteBabyBlocked(false)
@@ -788,7 +829,7 @@ local function updateRoom()
             -- grenze hinweg.
             room.resetSwitchTraversal()
             room.syncPhysicalShutters()
-            -- ONE-USE BRIDGE (AUFTRAG): nach dem abgeschlossenen Transit
+            -- ONE-USE BRIDGE : nach dem abgeschlossenen Transit
             -- kollabiert sie — eigener kurzer Collapse-Sound, nicht beim Start.
             if wasOneShot then
                 audio.playOneUseCollapse()
@@ -885,7 +926,7 @@ local function updateRoom()
     local moveResult = nil
     local wantedDelta = player.getDesiredDelta(FRAME_DT)
     if wantedDelta ~= 0 then
-        -- KEINE Tutorial-Bremse mehr (AUFTRAG „natuerliches Kurbelgefuehl"):
+        -- KEINE Tutorial-Bremse mehr :
         -- die Steuerung ist völlig normal; Tutorials starten rein über
         -- Proximity-Zonen, ohne Bewegungskorrektur.
         -- Tutorial: erster Ziehversuch (Player in Kontakt, bewegt sich vom
@@ -899,8 +940,6 @@ local function updateRoom()
         actualDelta, moveResult = room.movePlayer(wantedDelta)
         if actualDelta ~= 0 then
             render.notePlayerMovement(actualDelta)
-            -- Tutorial: erste echte Bewegung blendet den Kurbel-Hinweis aus.
-            tutorial.onPlayerMoved(currentRoomIndex)
             -- Audio: Bewegungsklick nur bei echter Ringstrecke (actualDelta);
             -- Bridge-Transit/Camera/DockAssist melden hier nichts.
             audio.noteRingMovement(actualDelta)
@@ -980,7 +1019,7 @@ local function updateRoom()
     -- (ON/OFF-Edge nur bei tatsächlichem Wechsel).
     syncPlateAudio()
 
-    -- Tutorial-Trigger (AUFTRAG „frueh, ohne Bewegungskorrektur"): neue
+    -- Tutorial-Trigger : neue
     -- Elemente werden per Proximity-Zone erklärt, sobald der Player in ihre
     -- Einführungszone kommt (kurz VOR dem Element). KEINE Brems-/Snap-/Kamera-
     -- Eingriffe — die Steuerung bleibt völlig normal. Startet der Fokus

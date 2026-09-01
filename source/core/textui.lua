@@ -4,7 +4,7 @@
 -- Warum: (1) Die Playdate-System-Font (Roobert-20) enthält KEINE Umlaut-
 -- Glyphen — ä/ö/ü/Ä/Ö/Ü/ß rendern als Ersatzzeichen. Lösung: die gebündelte
 -- Asheville-Rounded-24-Font (Playdate-Systemfont, weich/freundlich/ruhig,
--- leicht rund — AUFTRAG „natuerlichere Schrift") wird geladen und für allen
+-- leicht rund) wird geladen und für allen
 -- Text genutzt. Alle sichtbaren Spieltexte sind englisch (keine Umlaute
 -- mehr noetig). (2) playdate.graphics.drawText malt in diesem SDK IMMER
 -- schwarz (setColor wirkt nicht auf Text). Lösung: Text in ein Clear-Image
@@ -28,14 +28,14 @@ local gfx = playdate.graphics
 -- Gebündelte Playdate-Systemfont (Asheville Rounded 24, aus dem SDK in das
 -- Projekt kopiert) laden (defensiv). Fehlt sie, bleibt nil und der
 -- System-Font fällt zurück (ohne Umlaute, aber ohne Crash). Basis-Hoehe 24 px
--- (Zelle 32 px); die natuerlichere Schrift fuer Tutorial-/Room-UI (AUFTRAG).
+-- (Zelle 32 px); die natuerlichere Schrift fuer Tutorial-/Room-UI .
 local font = nil
 pcall(function()
     font = gfx.font.new("font/Asheville-Rounded-24-px")
 end)
 TextUI.font = font
 
--- FEINE Schrift für die untere Infoleiste (AUFTRAG „fein, ruhig, gut lesbar").
+-- FEINE Schrift für die untere Infoleiste .
 -- Asheville-Sans-14-Bold: natürliche 14 px, KEINE Skalierung (scharf, kein
 -- grober Downscale-Artefakt), weich/ruhig, gleiche Asheville-Familie. Nur für
 -- die Info-/Hinweis-Leiste; TextUI.font (Rounded 24) bleibt für Titel/ROOM.
@@ -84,6 +84,28 @@ function TextUI.drawBarTextRight(text, rightX, y)
     end
     local w = TextUI.barTextWidth(text)
     TextUI.drawBarText(text, rightX - w, y)
+end
+
+-- Weißer Text mit der feinen Leisten-Font, aber in einer KLEINEREN Variante
+-- (dieselbe Asheville-Sans-Bold-Familie, kompakter gerendert) — nur für die
+-- Player-Vorstellung (ROOM 1). scale ~0.8 -> ~11 px statt 14 px. Danach gilt
+-- wieder die normale Leisten-Font: alle übrigen Texte (inkl. „A = continue“)
+-- nutzen weiterhin TextUI.drawBarText/-Right in Normalgröße.
+function TextUI.drawBarTextScaled(text, x, y, scale)
+    if not text then
+        return
+    end
+    local img = gfx.imageWithText(tostring(text), 400, 240, gfx.kColorClear, nil, nil, kTextAlignment.left, effectiveBarFont())
+    if not img then
+        return
+    end
+    local s = scale or 0.8
+    if s ~= 1 and img.scaledImage ~= nil then
+        img = img:scaledImage(s, s)
+    end
+    gfx.setImageDrawMode(gfx.kDrawModeInverted)
+    img:draw(math.floor(x), math.floor(y))
+    gfx.setImageDrawMode(gfx.kDrawModeCopy)
 end
 
 -- Textbreite messen (UTF-8-sicher über die Font).

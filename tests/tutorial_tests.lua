@@ -63,25 +63,40 @@ check(Tutorial.hasHint() == false, "tutorial: transienter Hinweis blendet automa
 check(Tutorial.markSeen("dummy") == true, "tutorial: markSeen funktioniert neben Hinweis")
 Tutorial.consumeChanged()
 
--- persistenter Hinweis: bleibt bis dismiss
-Tutorial.showHintPersistent("move", "KURBEL — BEWEGEN")
+-- persistenter Hinweis: bleibt bis dismiss (generische Infrastruktur — der
+-- alte Kurbel-Hinweis selbst ist entfernt)
+Tutorial.init({})
+Tutorial.showHintPersistent("dummy", "PERSISTENT")
 check(Tutorial.hasHint() == true, "tutorial: persistenter Hinweis aktiv")
-check(Tutorial.isHintPersistent("move") == true, "tutorial: isHintPersistent erkennt key")
+check(Tutorial.isHintPersistent("dummy") == true, "tutorial: isHintPersistent erkennt key")
 Tutorial.updateHint(5.0)
 check(Tutorial.hasHint() == true, "tutorial: persistenter Hinweis läuft nicht ab")
-Tutorial.onPlayerMoved(1)
-check(Tutorial.hasHint() == true, "tutorial: onPlayerMoved startet Ausblenden (noch sichtbar)")
+Tutorial.dismissHint()
+check(Tutorial.hasHint() == true, "tutorial: dismissHint startet Ausblenden (noch sichtbar)")
 Tutorial.updateHint(0.31) -- Fade vorbei
 check(Tutorial.hasHint() == false, "tutorial: persistenter Hinweis ist ausgeblendet")
-check(Tutorial.isSeen("move") == true, "tutorial: onPlayerMoved markiert move als gesehen")
--- onPlayerMoved nur in Raum 1 und nur beim Kurbel-Hinweis
-Tutorial.init({})
-Tutorial.showHintPersistent("move", "KURBEL")
-Tutorial.onPlayerMoved(2)
-check(Tutorial.hasHint() == true, "tutorial: onPlayerMoved in Raum 2 blendet nichts aus")
-Tutorial.updateHint(0.31)
-check(Tutorial.isSeen("move") == false, "tutorial: onPlayerMoved in Raum 2 markiert move nicht")
 Tutorial.hint = nil
+
+-- PLAYER-VORSTELLUNG (ROOM 1): startPlayerIntro markiert „move“ und startet
+-- einen Fokus auf den Player — KEIN separater Kurbel-Hinweis mehr.
+Tutorial.init({})
+State.init(Levels[1], false)
+check(Tutorial.isSeen("move") == false, "tutorial: NEW GAME -> move noch nicht gesehen")
+local pStarted = Tutorial.startPlayerIntro()
+check(pStarted == true, "tutorial: startPlayerIntro startet die Vorstellung")
+check(Tutorial.focusActive() == true, "tutorial: Player-Vorstellung = Fokus aktiv")
+check(Tutorial.focus ~= nil and Tutorial.focus.key == "player", "tutorial: Fokus-Key = player")
+check(Tutorial.focus.text == "Turn the crank. See where it takes you.", "tutorial: Text = 'Turn the crank. See where it takes you.'")
+check(Tutorial.isSeen("move") == true, "tutorial: startPlayerIntro markiert move als gesehen")
+check(Tutorial.hasHint() == false, "tutorial: KEIN separater Kurbel-Hinweis (alter Hinweis entfernt)")
+-- einmal: erneuter Aufruf startet nichts Neues (auch nach A).
+check(Tutorial.startPlayerIntro() == false, "tutorial: Player-Vorstellung nur einmal")
+Tutorial.dismissFocus()
+check(Tutorial.startPlayerIntro() == false, "tutorial: nach A keine erneute Vorstellung")
+-- Raum 2: keine Player-Vorstellung.
+Tutorial.init({})
+State.init(Levels[2], false)
+check(Tutorial.checkLevelHints(2) == false, "tutorial: checkLevelHints in Raum 2 startet nichts")
 
 -- Begleiter-Screen: erster Baby-Schub startet den Fokus (genau einmal).
 Tutorial.init({})
@@ -196,12 +211,18 @@ State.init(Levels[7], false)
 ring, angle = Tutorial.focusObject("inactiveBridge")
 check(ring ~= nil and angle ~= nil, "tutorial: focusObject findet inaktive Brücke (Raum 7)")
 
--- Level-1-Check: Kurbel-Hinweis erscheint im ersten kontrollierbaren Moment
+-- Level-1-Check: Player-Vorstellung erscheint im ersten kontrollierbaren
+-- Moment (ersetzt den alten Kurbel-Hinweis vollständig).
 Tutorial.init({})
 State.init(Levels[1], false)
-Tutorial.checkLevelHints(1)
-check(Tutorial.isHintPersistent("move") == true, "tutorial: checkLevelHints zeigt Kurbel-Hinweis (Raum 1)")
-Tutorial.hint = nil
+check(Tutorial.checkLevelHints(1) == true, "tutorial: checkLevelHints startet Player-Vorstellung (Raum 1)")
+check(Tutorial.focusActive() == true and Tutorial.focus ~= nil and Tutorial.focus.key == "player",
+    "tutorial: Player-Vorstellung = Fokus auf den Player")
+check(Tutorial.isSeen("move") == true, "tutorial: checkLevelHints markiert move")
+check(Tutorial.hasHint() == false, "tutorial: kein alter Kurbel-Hinweis mehr")
+Tutorial.dismissFocus()
+check(Tutorial.checkLevelHints(1) == false, "tutorial: Player-Vorstellung nur einmal (Flag gesehen)")
+Tutorial.focus = nil
 
 -- --- Kontext-Trigger: Bruecke, Blockade, Ziel -------------------------------
 -- Bruecke: Player in dockRange einer Bruecke -> Fokus.
@@ -356,6 +377,25 @@ okDraw = pcall(function()
     Tutorial.dismissFocus()
 end)
 check(okDraw, "tutorial: drawFocus läuft fehlerfrei (Fokus-Fenster)")
+
+-- Player-Vorstellung (ROOM 1): Fokus auf den echten Player — die Zeichnung
+-- (Hervorhebung + Infoleiste) darf nicht crashen und nutzt die echte
+-- Player-Bildschirmposition (keine Ersatzgrafik).
+okDraw = pcall(function()
+    State.init(Levels[1], false)
+    Camera.init(State.room.rings.outer)
+    Tutorial.init({})
+    local ok = Tutorial.startPlayerIntro()
+    if ok then
+        Tutorial.drawFocus()
+        local f = Tutorial.focus
+        if f then
+            check(f.key == "player", "tutorial: drawFocus-Player-Fokus key = player")
+        end
+        Tutorial.dismissFocus()
+    end
+end)
+check(okDraw, "tutorial: drawFocus mit Player-Vorstellung läuft fehlerfrei")
 
 okDraw = pcall(function()
     Tutorial.drawHelp()

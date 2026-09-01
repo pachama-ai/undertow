@@ -300,7 +300,13 @@ function Room.movePlayer(wantedDelta)
                         -- Austrittskante: nur bei armierter Durchquerung in
                         -- DIESER Richtung auslösen (vollständige Überquerung).
                         if Room.switchTraversal[sw.id] == direction then
-                            local targetState = Switch.getTargetState(direction)
+                            -- EINMAL-Schalter mit anyDirection (Level 8, O):
+                            -- JEDE vollständige Überquerung (CW ODER CCW)
+                            -- führt zum Verbrauchszustand — der Spieler muss
+                            -- keine Richtungs-Konvention erraten. Nur für
+                            -- Schalter mit der anyDirection-Eigenschaft; alle
+                            -- übrigen behalten ihre Richtungslogik.
+                            local targetState = sw.anyDirection and "B" or Switch.getTargetState(direction)
                             local changed, changedElements = state.setSwitch(sw.id, targetState)
                             if changed then
                                 switchChanges = switchChanges + 1
@@ -759,7 +765,7 @@ function Room.updateDockAssist()
             end
         end
         -- Kernbrücke (Gate): DIESELBE Andockhilfe/Fangzone wie an normalen
-        -- Brücken (Auftrag „Center-Bridge gleiche Crank-Physik") — die Center-
+        -- Brücken  — die Center-
         -- Bridge fühlt sich steuerungstechnisch genauso an wie eine Ring->Ring-
         -- Brücke. Nur auf dem Gate-Ring, nur bei aktiver Kernbrücke. Wie bei
         -- Brücken NICHT assistieren, wenn der gemeinsame Baby-Transfer bereits
@@ -828,7 +834,7 @@ function Room.updateDockAssist()
     end
 end
 
--- --- Druckplatten-Magnet (Auftrag: „leicht magnetisch“) -------------------
+-- --- Druckplatten-Magnet  -------------------
 -- Wenn Player oder Baby IDLE sehr nah an einer Plattenmitte stehen (gleicher
 -- Ring, innerhalb config.plateSnapRange), rastet die Figur sanft über
 -- config.plateSnapFrames auf die exakte Plattenmitte ein. Kleiner Fangbereich,

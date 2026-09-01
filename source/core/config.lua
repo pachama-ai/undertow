@@ -46,8 +46,6 @@ Config = {
     -- unverändert).
     playerRadius = 6,        -- GAMEPLAY-Kontaktradius (px), unverändert
     playerBodyRadius = 6,    -- VISUELLER Körperradius (px) -> 12 px Durchmesser (11-13 px)
-    playerStroke = 0,        -- nicht mehr genutzt (Körper = playerBodyRadius)
-    playerHalo = 0,          -- keine weiße Unterlage mehr
     playerOutlineWidth = 1,  -- WEISSE Außenkontur um den schwarzen Körper (px)
     -- Pupille (Auge): großer weißer runder Kreis, Radius 2.5 px (~5 px
     -- Durchmesser = 42 % der 12-px-Körperbreite). maxOffset =
@@ -77,11 +75,6 @@ Config = {
     coreGrowthPerRoom = 2,
     corePulseAmplitude = 0.6, -- Haupt-Atemwelle des Kerns (px, flacher -> Puls-Minimum größer)
     corePulsePeriod = 3.0,   -- Sekunden pro Hauptwelle
-    -- Legacy (nicht mehr genutzt): Die Kernbrücke (Gate) ist seit dem Center-
-    -- Bridge-Fix eine NORMALE Brücke (gleiche Breite bridgeBodyWidth, gleiche
-    -- Punktspur/Form). Keine zweite Center-Bridgebreite, kein Stummel mehr.
-    bridgeWidth = 6,         -- Legacy: alte Gate-Balkenbreite (unbenutzt)
-    stubLength = 5,          -- Legacy: alter eingefahrener Gate-Stummel (unbenutzt)
     -- Brücken-Look (Design-Legende, Teil 3): INAKTIV = klare Punktspur (5-7
     -- identische weiße Punkte, Radius 1.5, Abstand 6 px) auf der Brücken-
     -- achse — nur möglicher Übergang, keine fertige Brücke.
@@ -160,14 +153,13 @@ Config = {
     -- Größen-Konstanten (bewusst: gleiche Form, kein Drift). GEDRÜCKT = nur
     -- eine sehr kleine 1-px-Reaktion (Rahmen 1 px dicker, Inneres rückt 1 px
     -- zusammen), die leere Rahmenform bleibt lesbar — kein Füllen/Mulde/Icon.
-    -- PRÄZISION (Auftrag): die Druckplatte reagiert nur, wenn das Baby (oder
+    -- PRÄZISION : die Druckplatte reagiert nur, wenn das Baby (oder
     -- der Player) WIRKLICH auf der Platte steht — der Druckbereich ist sehr
     -- klein (± platePressRange Grad), damit das Baby sichtbar exakt auf der
     -- Platte geparkt werden muss („genau auf der Platte, sonst geht es nicht“).
     platePressRange = 2,           -- Druckbereich der Platte (± Grad um plate.angle, präzise)
 
-    -- Druckplatte DARSTELLUNG (Auftrag: "Teil der Ringbahn, aber SOFORT
-    -- erkennbar"): die Platte ist ein BAHNSEGMENT — radial exakt über die
+    -- Druckplatte DARSTELLUNG: die Platte ist ein BAHNSEGMENT — radial exakt über die
     -- volle Bahnbreite (trackWidth), tangential plateSize px breit — mit
     -- SCHWARZER Innenfläche und kräftiger WEISSER Outline (plateOutlineWidth
     -- 3 px). Die Ringlinie endet sauber an der Plattenkante, die Platte folgt,
@@ -176,7 +168,7 @@ Config = {
     plateSize = 13,                -- tangentiale Plattenbreite (px; Baby 9 px + 2x2 Rand)
     plateOutlineWidth = 3,         -- WEISSE Outline-Stärke (px, deutlich sichtbar, dicker als früher)
 
-    -- Druckplatte MAGNET (Auftrag: "leicht magnetisch"): wenn Player oder Baby
+    -- Druckplatte MAGNET : wenn Player oder Baby
     -- IDLE sehr nah an einer Plattenmitte stehen (gleicher Ring, innerhalb
     -- plateSnapRange), rastet die Figur sanft über plateSnapFrames auf die
     -- exakte Plattenmitte ein. Kleiner Fangbereich, weiches kurzes Einrasten,
@@ -188,7 +180,7 @@ Config = {
     -- Steuerung: Ringgrad pro Kurbelgrad bzw. Grad pro Sekunde
     crankRatio = 0.5,
     dpadSpeed = 90,
-    -- Kurbel-Widerstand kurz vor dem Brückenübergang (Auftrag): unmittelbar
+    -- Kurbel-Widerstand kurz vor dem Brückenübergang : unmittelbar
     -- vor dem Dock einer AKTIVEN Brücke wird der Kurbelanteil leicht gedämpft
     -- (subtile Schwelle/Reibung — „hier ist etwas Besonderes“). Nur lokal
     -- (wenige Grad VOR dem Dock), kein harter Lock, kein Ruckeln; D-Pad bleibt
@@ -225,7 +217,6 @@ Config = {
     sharedFormationTolDeg = 2,
 
     -- Animationsdauern in Sekunden
-    shutterAnimDuration = 0.2,
     -- Brückenüberquerung/-transit (radiale Bewegung), währenddessen keine Eingabe
     bridgeAnimDuration = 0.35,
     cameraDuration = 1.2,
@@ -256,7 +247,7 @@ Config = {
     switchEyeWidenFrames = 6,  -- Augenweiten-Dauer in Frames
     shutterSquintFrames = 6,   -- Zusammenkneifen: exakt 6 Frames (verbindlich)
     bridgeStretchAmount = 2,   -- maximale radiale Streckung (px je Seite)
-    -- Impact-Reaktion (Auftrag: Segment-Kollision): stoppt der Player an einer
+    -- Impact-Reaktion : stoppt der Player an einer
     -- geschlossenen Blende, staucht sich der Körper kurz zusammen (radial +
     -- leicht tangential — als ob die Figur anstößt) und das Auge kneift zu.
     -- Dauer = shutterSquintFrames (6 Frames); die Flankenerkennung in
@@ -281,30 +272,20 @@ Config = {
     landingSquintFrames = 3,   -- Landing-Frames nach gemeinsamem Transit
     lookAtBabyFrames = 8,      -- kurzer Blick zum Baby nach der Landung (Frames, ~0.16 s)
 
-    -- Baby (generisch, Begleiter): QUADRATISCHER RAHMEN + runder Innenkreis
-    -- (Referenz: kleine quadratische Silhouette, klar vom runden Player
-    -- getrennt). Visualgröße und Gameplay-Kontaktradius sind sauber getrennt:
+    -- Baby (generisch, Begleiter): klar vom runden Player getrennt.
+    -- Visualgröße und Gameplay-Kontaktradius sind sauber getrennt:
     -- babyRadius/babyStroke (Gameplay-Kontakt/Schieben/Kollision) bleiben
-    -- unverändert; die reine Darstellung nutzt babyOuterSize/babyInnerRadius.
+    -- unverändert.
     babyRadius = 3.7,              -- GAMEPLAY-Kontaktradius (px), unverändert (Schieben/Kollision)
     babyStroke = 1,                -- Rahmenstärke (px); auch Gameplay-Marge (Shutter-Stopp)
-    babyOuterSize = 8,             -- Visual (Druckplatte): äußere Quadratgröße (px), bleibt für die Platte
-    babyInnerRadius = 2.0,         -- Visual (Druckplatte): runder Innenkreis (px), bleibt für die Platte
-    -- BABY-KÖRPER (neuer Look, wie der Player): schwarze Kugel + 1-px weiße
-    -- Außenkontur + RIESIGE weiße Pupille (süß). Baby-Radius ~5.5 px (~11 px
-    -- Durchmesser, etwas kleiner als der Player 12 px); Pupille 4 px (~8 px
-    -- Durchmesser = deutlich größer als die Player-Pupille 5 px — „riesige
-    -- süße Pupille“). Visualgröße ist von babyRadius (Gameplay) getrennt.
-    babyBodyRadius = 5.5,          -- Visual: Körperradius der runden Baby-Kugel (px) [nicht mehr genutzt: Baby ist Quadrat]
-    babyPupilRadius = 4.0,         -- Visual: Radius der großen weißen Pupille (px) [nicht mehr genutzt]
-    babyOutlineWidth = 1,          -- Visual: weiße Außenkontur (px, wie beim Player) [nicht mehr genutzt]
-    -- Baby-REDESIGN (Auftrag): das Baby ist ein VOLLSTÄNDIG SCHWARZ gefülltes
+    babyOutlineWidth = 1,          -- Visual: weiße Außenkontur (px)
+    -- Baby-REDESIGN: das Baby ist ein VOLLSTÄNDIG SCHWARZ gefülltes
     -- Quadrat — KEINE Augen/Pupille/Outline/Blink-Animation. Baby-Breite =
     -- exakt die normale Bridge-Breite (bridgeBodyWidth 9). Auf der weißen Bahn
     -- und der weißen Brücke bleibt es klar sichtbar; die Druckplatte ist auf
     -- diese Breite abgestimmt (plateSize = 9 + 2x2). Gameplay bleibt Push-only.
     babyVisualSize = 9,            -- Visual: Kantenlänge des schwarzen Baby-Quadrats (px = Bridge-Breite)
-    -- Baby-Shutter-Kontakt (Auftrag: Baby-Kontakt): das Baby stoppt mit seiner
+    -- Baby-Shutter-Kontakt : das Baby stoppt mit seiner
     -- sichtbaren Silhouette (Körper + Kontur) praktisch direkt an der Kante
     -- einer geschlossenen Blende — maximal ~0-1 px sichtbarer Abstand, NIE
     -- überlappend. babyShutterGapPx ist der nominale Restabstand der schwarzen
@@ -335,25 +316,16 @@ Config = {
     -- baby->player), sobald keine höher priorisierte Reaktion aktiv ist — das
     -- Baby sucht den Player, wo immer er ist. Travel klein (babyLookTravel),
     -- kein googly-eye. Die frühere Glance-Fensterlogik wurde entfernt.
-    -- Baby-Reaktionen (rein visuell, mechanisch-minimalistisch):
-    babyPushCompression = 1,       -- Push: max. 1 px Kompression in Pushrichtung
+    -- Baby-Reaktionen (rein visuell):
     babyBlockedFrames = 4,         -- Blocked: kurze Squint-Reaktion (Frames), schwächer als Player
-    babyTransitStretch = 1,        -- Transit: max. 1 px längsgerichtete Streckung (Quadratidentität bleibt)
-    -- Baby-HOP (süßes/kindliches Verhalten): sanfter kontinuierlicher Bob
-    -- (radial), beim Schieben/Landen ein kurzer freudiger Extra-Hüpfer mit
-    -- leicht „großen Augen“. Rein visuell.
-    babyHopAmount = 0.7,       -- Grund-Hüpfamplitude (px, sanft)
-    babyHopSpeed = 8.0,        -- Hüpf-Geschwindigkeit (rad/s)
-    babyExcitedFrames = 6,     -- Extra-Hüpfer-Dauer nach Push/Landing (Frames)
-    babyExcitedHop = 1.8,      -- Extra-Hüpf-Höhe (px) während der Aufregung
-    babyExcitedEye = 0.5,      -- Innenkreis-Boost (px) während der Aufregung
+    babyExcitedFrames = 6,         -- Extra-Hüpfer-Dauer nach Push/Landing (Frames)
     -- Baby-Dock (vier L-förmige Eckmarken an der gültigen Babyposition vor
     -- einer Brücke; Referenz-Variante A). Kein Punkt, keine Box, kein Puls.
     babyDockHalf = 6,              -- Dock-Footprint-Halber (px) -> 12×12
     babyDockArm = 2,               -- Schenkellänge je Eckwinkel (px, 1 px Strichstärke)
     babyDockProximityRange = 45,   -- Dock-Sichtbarkeit: Player UND Baby innerhalb (Grad zur Brückenachse)
     babyDockReadyFrames = 3,       -- Ready-Feedback: Ecken 1 px nach innen (Frames, einmalig)
-    -- Player-Dock (Auftrag: Positionshinweis Brückentransit): eigene reduzierte
+    -- Player-Dock : eigene reduzierte
     -- Markierung für die PLAYER-Zielposition am Brückenübergang — klar von der
     -- Baby-Dock-Sprache (vier L-Ecken) getrennt: eine kompakte KLAMMERFORM,
     -- die die Bahn „einklammert" (je ein tangentialer Balken knapp über und
@@ -365,7 +337,7 @@ Config = {
     playerDockHalf = 7,               -- Player-Dock: radialer Abstand der Klammerbalken von der Ringmitte (px) -> Bahnrand ± 3 px
     playerDockBar = 5,                -- Player-Dock: halbe tangentiale Länge eines Klammerbalkens (px) -> 10 px lang
     playerDockFoot = 2,               -- Player-Dock: Länge der Einhak-Füße (px, radial zur Bahn)
-    -- Bridge-Silhouetten (Auftrag: Ghost-Formen auf der Brücke): im Ready-/
+    -- Bridge-Silhouetten : im Ready-/
     -- Dock-Zustand zeigen dünne Geistumrisse auf der Brückenachse, wohin
     -- Player (gestrichelter Kreis) und Baby (dünnes Quadrat) beim Transit
     -- laufen. Nur kontextuell (aktive Brücke + Nähe), nie alle Brücken. Auf
@@ -480,7 +452,7 @@ Config = {
     audioCoreVolume = 0.25,           -- sehr leise, konservativ
     audioCoreSemitoneStep = 4,        -- große Terz = +4 Halbtöne pro Raum
 
-    -- NEUE SOUNDS (AUFTRAG „geschlossenes minimalistischeres Sounddesign"):
+    -- NEUE SOUNDS :
     -- bestehende Grundklänge bleiben; diese Werte ergänzen Feedback für Menü,
     -- Platte, Einmalschalter, Bridge-Retract/-Collapse, Tutorial, Restart,
     -- Raum-7-Spezialübergang und das finale Ende. Alle edge-getriggert.
@@ -556,19 +528,29 @@ Config = {
     audioRestartRebuildDuration = 0.34, -- = restartExpandDuration (synchron)
     audioRestartRebuildVolume = 0.45,
 
-    -- LEVEL-7-SPEZIALÜBERGANG (Audio, „Urknall“): während der langsamen
-    -- Expansion ein ansteigendes, raumhaftes Sog-Gefühl (der Haupt-Woosh
-    -- läuft in main.lua via playTransitionWoosh; hier die dezente Sog-
-    -- Unterlage über die gesamte Expansionsdauer). Beim schnellen Zusammen-
-    -- ziehen ein kurzer, starker Rückzugs-/Collapse-Sound (absteigender
-    -- Sweep + tiefer Impact). Die ROOM-Anzeige bleibt still.
-    audioP7ExpandStart = 0.5,        -- Expansion: Sog-Unterlage startet halb so tief wie der Kern
+    -- LEVEL-7-SPEZIALÜBERGANG (Audio, „Urknall“): Puls 1 = kleiner tiefer
+    -- Core-Impuls (kurz ansteigend), Puls 2 = etwas stärker / höher. Die
+    -- große Expansion = langsamer ansteigender, gespannter Synth-Sound (der
+    -- Haupt-Woosh läuft in main.lua via playTransitionWoosh; hier die dezente
+    -- Unterlage über die gesamte Expansionsdauer). Bei kompletter weißer
+    -- Fläche ein sehr kurzer Moment fast Stille (hold = still). Die Implosion
+    -- = sehr kurzer kräftiger SOG nach unten/innen (Masse wird schlagartig in
+    -- den Mittelpunkt gezogen) + tiefer Impact — KEIN Explosionsknall.
+    audioP7Pulse1Start = 0.9,        -- Puls 1: kleiner tiefer Core-Impuls (unter der Kernfrequenz)
+    audioP7Pulse1End = 1.1,          -- ... kurz ansteigend
+    audioP7Pulse1Duration = 0.09,    -- = phase7P1Up (Impuls beim Vergrößern)
+    audioP7Pulse1Volume = 0.14,      -- dezent
+    audioP7Pulse2Start = 1.0,        -- Puls 2: etwas stärker / höher
+    audioP7Pulse2End = 1.4,          -- ... klar höher als Puls 1 (wachsende Spannung)
+    audioP7Pulse2Duration = 0.11,    -- = phase7P2Up
+    audioP7Pulse2Volume = 0.18,      -- etwas präsenter als Puls 1
+    audioP7ExpandStart = 0.5,        -- Große Expansion: gespannter Synth-Sound startet halb so tief wie der Kern
     audioP7ExpandEnd = 1.15,         -- ... und steigt leicht über die Kernfrequenz
-    audioP7ExpandDuration = 2.0,     -- Sog-Unterlage begleitet die komplette Expansion (= phase7Expand)
+    audioP7ExpandDuration = 1.2,     -- begleitet die komplette Expansion (= phase7Expand)
     audioP7ExpandVolume = 0.18,      -- dezent (der Woosh trägt den Hauptanteil)
-    audioP7ContractStart = 1.3,      -- Kontraktion: Sweep startet über der Kernfrequenz
-    audioP7ContractEnd = 30,         -- ... und fällt extrem tief ab (kosmischer Kollaps)
-    audioP7ContractDuration = 0.28,  -- kurzer, prägnanter Rückzug (0.25-0.30 s)
+    audioP7ContractStart = 1.3,      -- Implosion: Sweep startet über der Kernfrequenz
+    audioP7ContractEnd = 30,         -- ... und fällt extrem tief ab (SOG in den Mittelpunkt)
+    audioP7ContractDuration = 0.15,  -- sehr kurz, schlagartig (= phase7Contract)
     audioP7ContractVolume = 0.5,
     audioP7ContractImpactFreq = 40,  -- tiefer Impact beim Kollaps (Hz)
     audioP7ContractImpactDuration = 0.15,
@@ -605,8 +587,6 @@ Config = {
     -- Auswahl verschwinden, nur der dicke Ring bleibt und wächst stark nach
     -- außen — Mittelpunkt exakt (200,120), KEIN Gameplay innerhalb des Rings,
     -- bis die Ringkante komplett aus dem Bild gewachsen ist (Endradius >= ~250).
-    menuFontHeight = 8,             -- (Kurbel-Overlay-Zeilenabstand; NICHT die echte Font-Höhe!)
-    menuTitleText = "UNDERTOW",     -- Spieltitel (nicht mehr auf dem Startscreen angezeigt; bleibt für Kompatibilität)
     menuTextLineHeight = 20,        -- echte Zeilenbox-Höhe des Systemfonts (font:getHeight(), gemessen)
     menuTitleCenterX = 200,         -- Titelkreis-Zentrum = Spielwelt-Zentrum (fixer Anker, nie wandern)
     menuTitleCenterY = 120,
@@ -653,7 +633,6 @@ Config = {
     -- Kollaps-/Wiederaufbau-Animation (Kamera-Skalierung), kein Hardcut.
     crankOverlayX = 288,            -- Crank-Hinweis-Box (obere rechte Ecke, kompakt)
     crankOverlayY = 8,
-    crankOverlayPadding = 5,        -- Crank-Hinweis: Innenabstand Text -> Rahmen (px; Boxgröße wird aus den echten Font-Metriken berechnet)
     crankHintDuration = 6.0,       -- Crank-Hinweis nur die ersten X s pro Raum (Onboarding)
     -- Restart-Animation (B): Ringe kollabieren zum Kern (Ease-In), kurzer
     -- Stillstand am Kern (Level wird dabei neu geladen), dann Wiederaufbau aus
@@ -724,8 +703,6 @@ Config = {
     roomTransBridgeEnd = 0.78,
     roomTransObjectStart = 0.70,      -- neue Schalter/Blenden/Platten/Marken erscheinen
     roomTransObjectEnd = 0.84,
-    roomTransBabyDockStart = 0.74,    -- neues Baby-Dock erscheint
-    roomTransBabyDockEnd = 0.88,
     roomTransFigureStart = 0.78,      -- neuer Player/Baby erscheinen (Landing-Settle)
     roomTransFigureEnd = 0.94,
     roomTransImpulseWindow = 0.10,    -- Future-Impuls: Dauer des einmaligen Impulses (Anteil Bewegung)
@@ -733,7 +710,7 @@ Config = {
     roomTransNewFutureStart = 0.85,   -- Neuer Future-Ring erscheint erst, wenn der alte Future fast eingerastet ist (Anteil; verhindert zwei eng nebeneinanderliegende Kreise um das Zentrum)
     roomTransFigureBulge = 0.06,      -- alte Figur: subtile Größenänderung während der Bewegung (Anteil)
     roomTransFigureScaleMin = 0.85,   -- neue Figur: Startgröße beim Landen (Anteil)
-    -- Center-Wipe (Raumwechsel, ui/wipe.lua, AUFTRAG „direkter Cut“): der
+    -- Center-Wipe (Raumwechsel): der
     -- gefüllte WEISSE Mittelpunkt wächst kontinuierlich aus (fester
     -- Mittelpunkt 200,120, Ease-In, NUR EIN gefüllter Kreis), bis er den
     -- KOMPLETTEN 400x240-Bildschirm bedeckt; erst dann wird der neue Raum
@@ -742,8 +719,8 @@ Config = {
     -- Raum — der weiße Kreis wird NICHT wieder kleiner. Kein Reveal, keine
     -- Figuren-Exit-Animation; Player/Baby stehen sofort korrekt.
     roomWipeGrow = 0.35,              -- Wipe: Kreis wächst über den Bildschirm (0.30-0.40 s)
-    roomWipeRoomHold = 2.0,           -- Wipe: „ROOM X / 10“ auf dem weißen Bildschirm (exakt ~2.0 s)
-    roomDisplayTotal = 10,            -- ROOM-Anzeige: Gesamtzahl („ROOM 1 / 10“ … „ROOM 10 / 10“)
+    roomWipeRoomHold = 2.0,           -- Wipe: „ROOM X / 9“ auf dem weißen Bildschirm (exakt ~2.0 s)
+    roomDisplayTotal = 9,             -- ROOM-Anzeige: Gesamtzahl („ROOM 1 / 9“ … „ROOM 9 / 9“ — es gibt genau 9 Level)
     roomWipeCoverRadius = 250,        -- Wipe-Zielradius: bedeckt den Screen komplett (Eckabstand ~233)
     -- Tutorial-Timing nach einem Raumwechsel: die Transition ist KOMPLETT
     -- fertig und Player/Baby sind sauber gelandet, dann bleibt das neue Level
@@ -752,7 +729,16 @@ Config = {
     -- Levelstate neu.
     roomTransTutorialSettle = 0.25,
 
-    -- Tutorial-Trigger (AUFTRAG „früh, ohne Bewegungskorrektur"): ein neues
+    -- Room-Reveal (Wachstum des NEUEN Raums nach einem Raumwechsel): Der
+    -- komplett fertige Raum erscheint zuerst KLEIN im Mittelpunkt (200,120)
+    -- und wächst als EINHEIT auf Normalgröße (Camera.revealScale skaliert alle
+    -- Radien gemeinsam — Ringbahnen, Core, Bridges, Shutter, Switches, Platten,
+    -- Player, Baby; kein Einzelaufbau). Rein visueller Transitions-/Render-
+    -- effekt, KEIN Gameplay-Eingriff (Eingabe gesperrt bis Scale exakt 1.0).
+    roomRevealStartScale = 0.30,      -- erste sichtbare Größe des neuen Raums (0.28-0.32, kompletter Raum klein)
+    roomRevealGrow = 0.80,            -- Wachstumsdauer 0.30 -> 1.00 (0.75-0.90 s, easeOutCubic)
+
+    -- Tutorial-Trigger : ein neues
     -- Element wird NICHT beim Levelstart erklärt, sondern erst, wenn der
     -- Player in dessen Einführungszone kommt — ca. 12-20° VOR dem Element
     -- (es ist bereits klar sichtbar, noch vor Kontakt/Aktivierung). KEINE
@@ -760,27 +746,31 @@ Config = {
     -- normal an; das Gameplay pausiert nur kurz, bis A gedrückt wird.
     tutorialProximityRange = 15,
 
-    -- Tutorial-Highlight (AUFTRAG „komplettes Spielfeld sichtbar"): KEIN
+    -- Tutorial-Highlight : KEIN
     -- schwarzer Vollbild-Overlay, KEINE harte Abdunkelung, kein Ausschnitt,
     -- kein Fokusfenster. Das restliche Spielfeld wird nur DEZENT abgeschwächt
     -- (siehe tutorialDimStep unten), das neue Element bleibt voll kontrast-
     -- reich und wird von einem engen, dezent pulsierenden Fokusrahmen markiert.
     -- Player/Baby bleiben normal sichtbar. Text steht in der unteren Infoleiste.
 
-    -- Tutorial-Untere Infoleiste (AUFTRAG „schwarzer Bereich nur unten"):
+    -- Tutorial-Untere Infoleiste :
     -- SOLID schwarzer Bereich unten mit feiner WEISSER Trennlinie fast über
     -- die volle Breite; darin weisse, FEINE Schrift (Asheville-Sans-14-Bold,
     -- natürliche 14 px — kein Downscale, keine abgeschnittene/grobe Typo).
     -- Text links, „A = continue" rechts (eigene Spalte, nie gequetscht).
-    -- Genau dasselbe Leistenformat gilt für alle Hinweise (auch
-    -- „Turn the crank to move.").
+    -- Genau dasselbe Leistenformat gilt für alle Hinweise (inkl. der
+    -- Player-Vorstellung in ROOM 1).
     tutorialBarHeight = 46,          -- Höhe der unteren Infoleiste (px; 2 Zeilen der 14-px-Font passen sicher)
     tutorialBarMargin = 14,          -- Randabstand Text/A (px, sauberer Innenabstand)
     tutorialLineX0 = 8,              -- Trennlinie: Start-x (fast volle Breite)
     tutorialLineX1 = 392,            -- Trennlinie: End-x
+    -- Player-Vorstellung (ROOM 1): NUR dieser eine Text („Turn the crank. See
+    -- where it takes you.") wird in einer etwas kleineren Variante der feinen
+    -- Leisten-Font gerendert (14 px * Scale). Alle anderen Tutorialtexte und
+    -- „A = continue“ behalten exakt ihre bisherige Schriftgröße.
+    tutorialPlayerIntroTextScale = 0.8,
 
-    -- Tutorial-Element-Hervorhebung (AUFTRAG „neues Element deutlich
-    -- hervorheben"): das restliche Spielfeld wird NUR dezent abgeschwächt
+    -- Tutorial-Element-Hervorhebung: das restliche Spielfeld wird NUR dezent abgeschwächt
     -- (1 schwarze Zeile alle tutorialDimStep Zeilen — Spielfeld bleibt klar
     -- lesbar, kein schwarzer Overlay); das neue Element + Player/Baby bleiben
     -- voll kontrastreich. Ein enger, symmetrischer Fokusrahmen (vier Eck-
@@ -791,28 +781,43 @@ Config = {
     tutorialMarkerLen = 10,          -- Fokusrahmen: Eckmarker-Länge (px)
     tutorialMarkerPulseSpeed = 2.5,  -- Puls-Geschwindigkeit (rad/s, dezent, kein Blinken)
 
-    -- Level-7-Spezialübergang (neue Phase, ui/phase7.lua, „Urknall“): nach
-    -- Abschluss von LEVEL 7 läuft KEIN normaler Levelwechsel (kein Center-
-    -- Wipe) — die Einführung ist vorbei. Stattdessen eine rein geometrische
-    -- kosmische Sequenz: Player+Baby sind bereits hinter dem Kern (Center-
-    -- Bridge) -> kurze Ruhe/Verdichtung -> LANGSAME, gleichmäßige EXPANSION
-    -- des hellen Kerns (wird immer heller und verdrängt die Ringelemente),
-    -- bis er die komplette Spielfläche füllt -> auf dem vollen weißen Bild
-    -- zentriert „ROOM X / 10“ für ~2 s (hier wird die neue Phase verdeckt
-    -- geladen) -> SCHNELLE Kontraktion zurück zum winzigen Punkt (wie ein
-    -- Urknall in umgekehrter Richtung) -> DIREKTER REVEAL von Level 8 (kein
-    -- Nachblenden, kein Wiederaufbau; Player/Baby stehen direkt korrekt an
-    -- ihren Startpositionen) -> sofort Gameplay, KEINE Tutorials.
+    -- Level-7-Spezialübergang (ui/phase7.lua, „Urknall“): nach Abschluss von
+    -- LEVEL 7 läuft KEIN normaler Levelwechsel (kein Center-Wipe) — die
+    -- Einführung ist vorbei. Während der GESAMTEN Animation bleibt die
+    -- Geometrie von ROOM 7 KOMPLETT STILL (keine Ringbewegung, keine
+    -- Skalierung, keine Bridge-Verschiebung, keine Player-/Babybewegung,
+    -- keine Kameraanimation): NUR der Core animiert seine Größe. Ablauf:
+    -- Player+Baby sind bereits hinter dem Kern (Center-Bridge) -> kurze
+    -- Verdichtung -> PULS 1 (Core schnell auf 1.18x, zurück auf exakt 1.0x,
+    -- kurze Pause) -> PULS 2 (auf 1.35x, zurück auf exakt 1.0x, kurze Pause)
+    -- -> GROSSE EXPANSION (erst jetzt, LANGSAM und kontinuierlich, bis der
+    -- gefüllte Core-Kreis die komplette Fläche weiss überdeckt) -> sehr
+    -- kurzer Vollbildmoment (hier wird der neue Raum verdeckt geladen) ->
+    -- ROOM-TEXT: „ROOM 8 / 9“ auf rein weißem Bildschirm für exakt 2 s
+    -- (kein Room dahinter sichtbar, keine Transitionanimation) -> Text weg
+    -- -> Room-Reveal: ROOM 8 erscheint KOMPLETT aber KLEIN (Startgröße
+    -- ~0.30) im Mittelpunkt und wächst als Einheit auf Normalgröße (kein
+    -- Fullsize-Flash, kein Text/Room-Overlap) -> sofort Gameplay, KEINE
+    -- Tutorials. KEINE Implosion mehr.
     screenWidth = 400,               -- Bildschirmbreite (Overlay-Fläche)
     screenHeight = 240,              -- Bildschirmhöhe
     phaseTwoStartRoom = 8,           -- ab diesem Raum beginnt Phase 2 (keine Tutorial-Overlays mehr)
-    phase7Rest = 0.30,               -- kurze Ruhe/Verdichtung am Kern (0.25-0.35 s)
-    phase7Expand = 2.0,              -- LANGSAME Expansion des Kerns bis zum Vollbild (gleichmäßig, unaufhaltsam)
-    phase7TextHold = 2.0,            -- „ROOM X / 10“ auf dem vollen weißen Bild (exakt ~2 s)
-    phase7Contract = 0.30,           -- SCHNELLE Kontraktion zurück zum winzigen Punkt (deutlich schneller als die Expansion)
-    phase7TinyPoint = 2,             -- Radius des winzigen weißen Punkts (px)
+    phase7Rest = 0.10,               -- kurze Verdichtung am Kern (sanfter, kaum wahrnehmbarer Start)
+    phase7P1Up = 0.08,               -- PULS 1: Core SEHR SCHNELL vergrößern (exakt ~0.08 s)
+    phase7P1Scale = 1.18,            -- Puls 1: Zielfaktor über dem normalen Core (1.18x)
+    phase7P1Down = 0.08,             -- Puls 1: wieder zurück auf die normale Größe (exakt ~0.08 s)
+    phase7Pause1 = 0.04,             -- kurze Pause bei normaler Größe (nur ~0.04 s)
+    phase7P2Up = 0.10,               -- PULS 2: erneut vergrößern — SEHR SCHNELL, sichtbar stärker (exakt ~0.10 s)
+    phase7P2Scale = 1.35,            -- Puls 2: Zielfaktor (klar größer als Puls 1)
+    phase7P2Down = 0.09,             -- Puls 2: komplett zurück auf die normale Größe (exakt ~0.09 s)
+    phase7Pause2 = 0.04,             -- kurze Pause bei normaler Größe (nur ~0.04 s)
+    phase7Expand = 1.1,              -- GROSSE EXPANSION: bewusst LANGSAM und kontinuierlich bis zum Vollbild (1.0-1.2 s, klar getrennt von den Pulsen)
+    phase7Hold = 0.05,               -- sehr kurzer Vollbildmoment (rein weiß, kein Text; hier wird der neue Raum verdeckt geladen)
+    phase7Contract = 0.15,           -- NICHT MEHR VERWENDET (keine Implosion mehr; nur für Kompatibilität behalten)
+    phase7TinyPoint = 2,             -- Radius des winzigen weißen Punkts (px; nicht mehr aktiv)
     phase7ExpandDitherStart = 50,    -- Start-Deckkraft des hellen Kerns (Kern-Optik) — wächst auf 100%
-    phase7CoverRadius = 250,         -- Expansions-Zielradius: bedeckt den Screen komplett (Eckabstand ~233)
+    phase7CoverRadius = 250,         -- Vollbild-Radius: bedeckt ALLE 4 Ecken (Eckabstand ~233, sicher 250)
+    phase7RoomLabelHold = 2.0,       -- „ROOM 8 / 9“ auf rein weißem Bildschirm, exakt 2.0 s (KEIN Room dahinter)
 
     audioCompletionFreq = 55,      -- tiefer Systemimpuls (Hz)
     audioCompletionDuration = 0.25,-- Impulsdauer (s)

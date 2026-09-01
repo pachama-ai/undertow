@@ -35,7 +35,7 @@ local babyBridgeLayerSynth = nil -- Square, hell (gemeinsamer Brückentransfer)
 local bridgeGlide = nil   -- Controlsignal für den Bridge-Glide
 local bridgeCrossGlide = nil -- Controlsignal für den Brückenwechsel-Sweep
 local roomTransGlide = nil   -- Controlsignal für den Raumübergangs-Sweep
--- NEUE Stimmen (AUFTRAG „Palette erweitern statt ersetzen"): tone = Triangle
+-- NEUE Stimmen : tone = Triangle
 -- + Glide (Menü, Platte, weiche UI-Sweeps), special = Sine + Glide (Restart,
 -- Phase-7-Spezialübergang, finales Ausschwingen).
 local toneSynth = nil        -- Triangle, weiche/freundliche Aktionen
@@ -183,7 +183,7 @@ function Audio.update(dt)
                 config.audioBridgeSettleLen)
         end
     end
-    -- MIXING (AUFTRAG): während großer Übergänge (Center-Wipe-ROOM-Anzeige,
+    -- MIXING : während großer Übergänge (Center-Wipe-ROOM-Anzeige,
     -- Restart, Phase-7-Sequenz) pausiert der Kernpuls — komplette Ruhe bei der
     -- ROOM-X-/ROOM-10-Anzeige; danach startet er automatisch wieder.
     if coreHold > 0 then
@@ -212,7 +212,7 @@ function Audio.setCompleted()
     coreCompleted = true
 end
 
--- MIXING (AUFTRAG): unterdrückt den Kernpuls für `seconds` Sekunden (große
+-- MIXING : unterdrückt den Kernpuls für `seconds` Sekunden (große
 -- Übergänge, ROOM-X-/ROOM-10-Anzeige = komplette Ruhe). Danach läuft er
 -- automatisch weiter.
 function Audio.setCoreHold(seconds)
@@ -289,7 +289,7 @@ function Audio.playPlateOff()
         config.audioPlateLen, config.audioPlateOffVolume)
 end
 
--- PLATE-Transitions (EDGE-Trigger, AUFTRAG): main.lua meldet jede echte
+-- PLATE-Transitions (EDGE-Trigger): main.lua meldet jede echte
 -- Zustandskante false->true (on) bzw. true->false (off). Nie pro Frame.
 function Audio.notePlateTransitions(transitions)
     if not inited or not transitions then return end
@@ -387,16 +387,29 @@ end
 function Audio.notePhase7Phase(phase, roomIndex)
     if not inited then return end
     local base = Audio.coreFrequency(roomIndex or 7)
-    if phase == "expand" then
-        -- LANGSAME EXPANSION: dezente, ansteigende Sog-Unterlage über die
-        -- gesamte Expansionsdauer (raumhaftes Wusch/Sog). Der Haupt-Woosh
-        -- läuft zusätzlich in main.lua (playTransitionWoosh).
+    if phase == "p1_up" then
+        -- PULS 1: kleiner, tiefer Core-Impuls (kurz ansteigend). Ruhig.
+        -- Kern „atmet“ nach außen.
+        glideNote(specialSynth, specialGlide,
+            base * config.audioP7Pulse1Start, base * config.audioP7Pulse1End,
+            config.audioP7Pulse1Duration, config.audioP7Pulse1Volume)
+    elseif phase == "p2_up" then
+        -- PULS 2: etwas stärker / höher (wachsende Spannung).
+        -- (wachsende Spannung vor der großen Welle).
+        glideNote(specialSynth, specialGlide,
+            base * config.audioP7Pulse2Start, base * config.audioP7Pulse2End,
+            config.audioP7Pulse2Duration, config.audioP7Pulse2Volume)
+    elseif phase == "expand" then
+        -- GROSSE EXPANSION: langsamer ansteigender, gespannter Synth-Sound
+        -- über die gesamte Expansionsdauer. Der Haupt-Woosh läuft zusätzlich
+        -- in main.lua (playTransitionWoosh).
         glideNote(specialSynth, specialGlide,
             base * config.audioP7ExpandStart, base * config.audioP7ExpandEnd,
             config.audioP7ExpandDuration, config.audioP7ExpandVolume)
     elseif phase == "contract" then
-        -- SCHNELLER KOSMISCHER KOLLAPS: kurzer, starker absteigender Sweep
-        -- (Urknall in umgekehrter Richtung) + tiefer Impact.
+        -- EXTREM SCHNELLE IMPLOSION: sehr kurzer kräftiger SOG nach unten/
+        -- innen (Masse wird schlagartig in den Mittelpunkt gezogen) + tiefer
+        -- Impact. KEIN Explosionsknall, keine Partikel.
         glideNote(specialSynth, specialGlide,
             base * config.audioP7ContractStart, config.audioP7ContractEnd,
             config.audioP7ContractDuration, config.audioP7ContractVolume)
@@ -405,7 +418,8 @@ function Audio.notePhase7Phase(phase, roomIndex)
             config.audioP7ContractImpactVolume,
             config.audioP7ContractImpactDuration)
     end
-    -- "text": Stille (kurz, sauber, ruhig — kein Sound auf der ROOM-Anzeige).
+    -- "hold": fast Stille (sehr kurzer Spannungsmoment vor dem Kollaps).
+    -- rest/pausen: still.
 end
 
 -- --- FINALES ENDE (letzter Raum) ------------------------------------------
@@ -507,7 +521,7 @@ function Audio.playBridgeCrossing()
         config.audioBridgeCrossFreq,
         config.audioBridgeCrossVolume,
         config.audioBridgeCrossDuration)
-    -- Pass 3 (Auftrag): kleiner mechanischer Abschluss beim Landen
+    -- Pass 3 : kleiner mechanischer Abschluss beim Landen
     -- (zip/shff -> tick). Zeitversetzt auf demselben Synth (when = Start +
     -- Dauer) — genau EIN Transit-Sound pro Aufruf, kein Frame-Sound, kein Spam.
     bridgeCrossSynth:playNote(

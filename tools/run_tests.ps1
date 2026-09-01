@@ -70,6 +70,7 @@ try {
     $srcCamera = Join-Path $root 'source\ui\camera.lua'
     $srcRoomTransition = Join-Path $root 'source\ui\roomtransition.lua'
     $srcPhase7 = Join-Path $root 'source\ui\phase7.lua'
+    $srcRoomReveal = Join-Path $root 'source\ui\roomreveal.lua'
     $srcMenu = Join-Path $root 'source\ui\menu.lua'
     $srcTransition = Join-Path $root 'source\ui\transition.lua'
     $srcTestsGeometry = Join-Path $root 'tests\geometry_tests.lua'
@@ -97,6 +98,12 @@ try {
     $srcTestsRoom4 = Join-Path $root 'tests\room4_tests.lua'
     $srcTestsTutorial = Join-Path $root 'tests\tutorial_tests.lua'
     $srcTestsPhase7 = Join-Path $root 'tests\phase7_tests.lua'
+    $srcTestsRoom78 = Join-Path $root 'tests\room78_transition_test.lua'
+    $srcTestsLevel8Full = Join-Path $root 'tests\level8_full_solution_test.lua'
+    $srcTestsLevel8TopLeft = Join-Path $root 'tests\level8_top_left_check.lua'
+    $srcTestsLevel9Full = Join-Path $root 'tests\level9_full_solution_test.lua'
+    $srcTestsLevel8FinalState = Join-Path $root 'tests\level8_final_state_check.lua'
+    $srcTestsLevel8D2Variant = Join-Path $root 'tests\level8_d2_variant_check.lua'
     if (-not (Test-Path -LiteralPath $srcConfig)) { throw "config.lua fehlt: $srcConfig" }
     if (-not (Test-Path -LiteralPath $srcGeometry)) { throw "geometry.lua fehlt: $srcGeometry" }
     if (-not (Test-Path -LiteralPath $srcState)) { throw "state.lua fehlt: $srcState" }
@@ -175,6 +182,7 @@ try {
     Copy-Item -LiteralPath $srcCamera -Destination (Join-Path $srcDir 'ui\camera.lua') -Force
     Copy-Item -LiteralPath $srcRoomTransition -Destination (Join-Path $srcDir 'ui\roomtransition.lua') -Force
     Copy-Item -LiteralPath $srcPhase7 -Destination (Join-Path $srcDir 'ui\phase7.lua') -Force
+    Copy-Item -LiteralPath $srcRoomReveal -Destination (Join-Path $srcDir 'ui\roomreveal.lua') -Force
     Copy-Item -LiteralPath $srcMenu -Destination (Join-Path $srcDir 'ui\menu.lua') -Force
     Copy-Item -LiteralPath $srcTransition -Destination (Join-Path $srcDir 'ui\transition.lua') -Force
     Copy-Item -LiteralPath $srcTestsRender -Destination (Join-Path $srcDir 'render_tests.lua') -Force
@@ -194,6 +202,13 @@ try {
     Copy-Item -LiteralPath $srcTestsRoom4 -Destination (Join-Path $srcDir 'room4_tests.lua') -Force
     Copy-Item -LiteralPath $srcTestsTutorial -Destination (Join-Path $srcDir 'tutorial_tests.lua') -Force
     Copy-Item -LiteralPath $srcTestsPhase7 -Destination (Join-Path $srcDir 'phase7_tests.lua') -Force
+    Copy-Item -LiteralPath $srcTestsRoom78 -Destination (Join-Path $srcDir 'room78_transition_test.lua') -Force
+    Copy-Item -LiteralPath $srcTestsLevel8Full -Destination (Join-Path $srcDir 'level8_full_solution_test.lua') -Force
+    Copy-Item -LiteralPath $srcTestsLevel8TopLeft -Destination (Join-Path $srcDir 'level8_top_left_check.lua') -Force
+    Copy-Item -LiteralPath $srcTestsLevel9Full -Destination (Join-Path $srcDir 'level9_full_solution_test.lua') -Force
+    Copy-Item -LiteralPath $srcTestsLevel8FinalState -Destination (Join-Path $srcDir 'level8_final_state_check.lua') -Force
+    Copy-Item -LiteralPath $srcTestsLevel8D2Variant -Destination (Join-Path $srcDir 'level8_d2_variant_check.lua') -Force
+    Copy-Item -LiteralPath (Join-Path $root 'build\_l9debug.lua') -Destination (Join-Path $srcDir '_l9debug.lua') -Force
 
     # --- 5) pdxinfo und Runner-main.lua ------------------------------------
     Set-Content -LiteralPath (Join-Path $srcDir 'pdxinfo') -Value ("name=Ringetests`nversion=0.1`nbundleID=" + $bundleId + "`n") -Encoding ascii
@@ -241,6 +256,7 @@ local ok, err = pcall(function()
     import("ui/camera")
     import("ui/roomtransition")
     import("ui/phase7")
+    import("ui/roomreveal")
     import("ui/menu")
     import("ui/transition")
     import("geometry_tests")
@@ -268,16 +284,22 @@ local ok, err = pcall(function()
     import("room4_tests")
     import("tutorial_tests")
     import("phase7_tests")
+    import("room78_transition_test")
+    import("level8_full_solution_test")
+    import("level8_top_left_check")
+    import("level9_full_solution_test")
+    import("level8_final_state_check")
+    import("level8_d2_variant_check")
 end)
-if ok and TestReport.geometry and TestReport.state and TestReport.undo and TestReport.player and TestReport.movement and TestReport.connection and TestReport.integration and TestReport.switch and TestReport.render and TestReport.dockAssist and TestReport.camera and TestReport.audio and TestReport.menu and TestReport.save and TestReport.systemMenu and TestReport.input and TestReport.progression and TestReport.transition and TestReport.roomTransition and TestReport.switchTraversal and TestReport.baby and TestReport.room3 and TestReport.room4 and TestReport.tutorial and TestReport.phase7 then
-    local totalPass = TestReport.geometry.pass + TestReport.state.pass + TestReport.undo.pass + TestReport.player.pass + TestReport.movement.pass + TestReport.connection.pass + TestReport.integration.pass + TestReport.switch.pass + TestReport.render.pass + TestReport.dockAssist.pass + TestReport.camera.pass + TestReport.audio.pass + TestReport.menu.pass + TestReport.save.pass + TestReport.systemMenu.pass + TestReport.input.pass + TestReport.progression.pass + TestReport.transition.pass + TestReport.roomTransition.pass + TestReport.switchTraversal.pass + TestReport.baby.pass + TestReport.room3.pass + TestReport.room4.pass + TestReport.tutorial.pass + TestReport.phase7.pass
-    local totalFail = TestReport.geometry.fail + TestReport.state.fail + TestReport.undo.fail + TestReport.player.fail + TestReport.movement.fail + TestReport.connection.fail + TestReport.integration.fail + TestReport.switch.fail + TestReport.render.fail + TestReport.dockAssist.fail + TestReport.camera.fail + TestReport.audio.fail + TestReport.menu.fail + TestReport.save.fail + TestReport.systemMenu.fail + TestReport.input.fail + TestReport.progression.fail + TestReport.transition.fail + TestReport.roomTransition.fail + TestReport.switchTraversal.fail + TestReport.baby.fail + TestReport.room3.fail + TestReport.room4.fail + TestReport.tutorial.fail + TestReport.phase7.fail
+if ok and TestReport.geometry and TestReport.state and TestReport.undo and TestReport.player and TestReport.movement and TestReport.connection and TestReport.integration and TestReport.switch and TestReport.render and TestReport.dockAssist and TestReport.camera and TestReport.audio and TestReport.menu and TestReport.save and TestReport.systemMenu and TestReport.input and TestReport.progression and TestReport.transition and TestReport.roomTransition and TestReport.switchTraversal and TestReport.baby and TestReport.room3 and TestReport.room4 and TestReport.tutorial and TestReport.phase7 and TestReport.room78Transition and TestReport.level8Full and TestReport.level8TopLeft and TestReport.level9Full and TestReport.level8FinalState and TestReport.level8D2Variant then
+    local totalPass = TestReport.geometry.pass + TestReport.state.pass + TestReport.undo.pass + TestReport.player.pass + TestReport.movement.pass + TestReport.connection.pass + TestReport.integration.pass + TestReport.switch.pass + TestReport.render.pass + TestReport.dockAssist.pass + TestReport.camera.pass + TestReport.audio.pass + TestReport.menu.pass + TestReport.save.pass + TestReport.systemMenu.pass + TestReport.input.pass + TestReport.progression.pass + TestReport.transition.pass + TestReport.roomTransition.pass + TestReport.switchTraversal.pass + TestReport.baby.pass + TestReport.room3.pass + TestReport.room4.pass + TestReport.tutorial.pass + TestReport.phase7.pass + TestReport.room78Transition.pass + TestReport.level8Full.pass + TestReport.level8TopLeft.pass + TestReport.level9Full.pass + TestReport.level8FinalState.pass + TestReport.level8D2Variant.pass
+    local totalFail = TestReport.geometry.fail + TestReport.state.fail + TestReport.undo.fail + TestReport.player.fail + TestReport.movement.fail + TestReport.connection.fail + TestReport.integration.fail + TestReport.switch.fail + TestReport.render.fail + TestReport.dockAssist.fail + TestReport.camera.fail + TestReport.audio.fail + TestReport.menu.fail + TestReport.save.fail + TestReport.systemMenu.fail + TestReport.input.fail + TestReport.progression.fail + TestReport.transition.fail + TestReport.roomTransition.fail + TestReport.switchTraversal.fail + TestReport.baby.fail + TestReport.room3.fail + TestReport.room4.fail + TestReport.tutorial.fail + TestReport.phase7.fail + TestReport.room78Transition.fail + TestReport.level8Full.fail + TestReport.level8TopLeft.fail + TestReport.level9Full.fail + TestReport.level8FinalState.fail + TestReport.level8D2Variant.fail
     print("RESULT passed=" .. totalPass .. " failed=" .. totalFail .. " complete=1")
 else
     if not ok then
         print("TESTS_RUN_ERROR: " .. tostring(err))
     else
-        print("MISSING_TEST_RESULTS: geometry=" .. tostring(TestReport.geometry ~= nil) .. " state=" .. tostring(TestReport.state ~= nil) .. " undo=" .. tostring(TestReport.undo ~= nil) .. " player=" .. tostring(TestReport.player ~= nil) .. " movement=" .. tostring(TestReport.movement ~= nil) .. " connection=" .. tostring(TestReport.connection ~= nil) .. " integration=" .. tostring(TestReport.integration ~= nil) .. " switch=" .. tostring(TestReport.switch ~= nil) .. " render=" .. tostring(TestReport.render ~= nil) .. " dockAssist=" .. tostring(TestReport.dockAssist ~= nil) .. " camera=" .. tostring(TestReport.camera ~= nil) .. " audio=" .. tostring(TestReport.audio ~= nil) .. " menu=" .. tostring(TestReport.menu ~= nil) .. " save=" .. tostring(TestReport.save ~= nil) .. " systemMenu=" .. tostring(TestReport.systemMenu ~= nil) .. " input=" .. tostring(TestReport.input ~= nil) .. " progression=" .. tostring(TestReport.progression ~= nil) .. " transition=" .. tostring(TestReport.transition ~= nil) .. " roomTransition=" .. tostring(TestReport.roomTransition ~= nil) .. " switchTraversal=" .. tostring(TestReport.switchTraversal ~= nil) .. " baby=" .. tostring(TestReport.baby ~= nil) .. " room3=" .. tostring(TestReport.room3 ~= nil) .. " room4=" .. tostring(TestReport.room4 ~= nil) .. " tutorial=" .. tostring(TestReport.tutorial ~= nil) .. " phase7=" .. tostring(TestReport.phase7 ~= nil))
+        print("MISSING_TEST_RESULTS: geometry=" .. tostring(TestReport.geometry ~= nil) .. " state=" .. tostring(TestReport.state ~= nil) .. " undo=" .. tostring(TestReport.undo ~= nil) .. " player=" .. tostring(TestReport.player ~= nil) .. " movement=" .. tostring(TestReport.movement ~= nil) .. " connection=" .. tostring(TestReport.connection ~= nil) .. " integration=" .. tostring(TestReport.integration ~= nil) .. " switch=" .. tostring(TestReport.switch ~= nil) .. " render=" .. tostring(TestReport.render ~= nil) .. " dockAssist=" .. tostring(TestReport.dockAssist ~= nil) .. " camera=" .. tostring(TestReport.camera ~= nil) .. " audio=" .. tostring(TestReport.audio ~= nil) .. " menu=" .. tostring(TestReport.menu ~= nil) .. " save=" .. tostring(TestReport.save ~= nil) .. " systemMenu=" .. tostring(TestReport.systemMenu ~= nil) .. " input=" .. tostring(TestReport.input ~= nil) .. " progression=" .. tostring(TestReport.progression ~= nil) .. " transition=" .. tostring(TestReport.transition ~= nil) .. " roomTransition=" .. tostring(TestReport.roomTransition ~= nil) .. " switchTraversal=" .. tostring(TestReport.switchTraversal ~= nil) .. " baby=" .. tostring(TestReport.baby ~= nil) .. " room3=" .. tostring(TestReport.room3 ~= nil) .. " room4=" .. tostring(TestReport.room4 ~= nil) .. " tutorial=" .. tostring(TestReport.tutorial ~= nil) .. " phase7=" .. tostring(TestReport.phase7 ~= nil) .. " room78Transition=" .. tostring(TestReport.room78Transition ~= nil) .. " level9Full=" .. tostring(TestReport.level9Full ~= nil) .. " level8FinalState=" .. tostring(TestReport.level8FinalState ~= nil) .. " level8D2Variant=" .. tostring(TestReport.level8D2Variant ~= nil))
     end
 end
 if logFile then

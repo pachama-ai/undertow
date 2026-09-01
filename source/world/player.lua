@@ -36,7 +36,7 @@ function Player.computeDesiredDelta(crankChange, leftPressed, rightPressed, dt, 
     return crankDelta + dpadDelta
 end
 
--- Kurbel-Widerstand kurz vor einer AKTIVEN Brücke (Auftrag): liefert den
+-- Kurbel-Widerstand kurz vor einer AKTIVEN Brücke : liefert den
 -- Dämpfungsfaktor (1 = normal) für den Kurbelanteil, wenn der Player in der
 -- schmalen Widerstandszone unmittelbar VOR dem Dock einer aktiven Brücke
 -- steht und sich in deren Richtung bewegt (direction: +1 CW, -1 CCW). Die

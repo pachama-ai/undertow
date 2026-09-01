@@ -1,4 +1,4 @@
--- wipe.lua — Center-Wipe (Raumwechsel, AUFTRAG „direkter Cut“):
+-- wipe.lua — Center-Wipe (Raumwechsel):
 --
 -- Ablauf:
 --   1) Player + Baby fahren wie bisher gemeinsam über die Center-Bridge zum
@@ -56,7 +56,7 @@ function Wipe.start(nextIndex, playerFrom, playerTo, babyFrom, babyTo, oldRoomIn
     Wipe.fromCoreRadius = config.coreRadius + (fromIdx - 1) * config.coreGrowthPerRoom
 end
 
--- Startet die ROOM-ANZEIGE DIREKT (ohne Grow) — z. B. „ROOM 1 / 10“ beim
+-- Startet die ROOM-ANZEIGE DIREKT (ohne Grow) — z. B. „ROOM 1 / 9“ beim
 -- Beginn von Level 1 (NEW GAME) direkt nach der Starttransition: sofort
 -- weißer Bildschirm, ROOM-Text für roomWipeRoomHold, dann direkter Cut auf
 -- das (bereits fertig darunterliegende) Level.
